@@ -1,8 +1,16 @@
 #include <Arduino.h>
 #include "Scheduler.h"
 #include <RtcDS3231.h>
+#include "EEPROM.h"
 
+const char* dayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
+void Scheduler::loadFromMemory(uint8_t memConfigStart){
+  rules_count = EEPROM.read(memConfigStart);
+
+  for (unsigned int t=0; t<sizeof(schedule); t++)
+  *((char*)&schedule + t) = EEPROM.read(memConfigStart + 1 + t);
+}
 
 void Scheduler::poll( )
 {
@@ -24,7 +32,9 @@ void Scheduler::add(char **args){
 
   schedule[rules_count].relaygroup      = atoi(args[2]);
   schedule[rules_count].index           = atoi(args[3]);
-  schedule[rules_count].year            = atoi(args[4]);
+  int year = atoi(args[4]);
+  if(year > 2000) year -= 2000;
+  schedule[rules_count].year            = year;
   schedule[rules_count].month           = atoi(args[5]);
   schedule[rules_count].day             = atoi(args[6]);
   schedule[rules_count].dayofweek       = atoi(args[7]);
@@ -33,60 +43,105 @@ void Scheduler::add(char **args){
   schedule[rules_count].open_min        = atoi(args[10]);
   schedule[rules_count].close_hour      = atoi(args[11]);
   schedule[rules_count].close_min       = atoi(args[12]);
-  schedule[rules_count].last            = atoi(args[13]);
   rules_count++;
+
 }
 
+void Scheduler::clearAll(){
+  rules_count = 0;
+}
+
+void Scheduler::save(uint8_t memConfigStart){
+
+
+  EEPROM.write(memConfigStart, rules_count);
+  char *s = (char *) &schedule;
+
+  for (unsigned int t=0; t<sizeof(schedule); t++)
+  {
+    char value = *(s + t);
+    EEPROM.write(memConfigStart + 1 + t, value);
+        if (EEPROM.read(memConfigStart + 1 + t) != value)
+        {
+          Serial.print("x");
+        }else{
+          Serial.print(".");
+        }
+  }
+
+  Serial.print("Saved ");
+  Serial.print(sizeof(schedule)+1);
+  Serial.println(" bytes of data");
+  
+}
 
 void Scheduler::list(char **args){
+          Serial.println("- Basic Door Controller [ Scheduled Rule Index ]");
     for (int i=0; i<rules_count; i++)
     {
+          //Serial.print("- ");
+          //Serial.print(i);
+          //Serial.print(".");
+          //Serial.println(schedule[i].index);
+          //Serial.print("- Relay Group ");
+          //Serial.println(schedule[i].relaygroup);
 
-          Serial.print("[trueindex ");
-          Serial.print(" ");
-          Serial.print(i );
-          Serial.print(" ");
-          Serial.print(schedule[i].index);
-          Serial.print(" ");
-          Serial.print(schedule[i].relaygroup);
-          Serial.print(" ");
-          Serial.print(schedule[i].year);
-          Serial.print(" ");
-          Serial.print(schedule[i].month);
-          Serial.print(" ");
-          Serial.print(schedule[i].day);
-          Serial.print(" ");
-          Serial.print(schedule[i].dayofweek);
-          Serial.print(" ");
-          Serial.print(schedule[i].closed_all_day);
-          Serial.print(" ");
+          if(schedule[i].year != 255){
+            if(schedule[i].closed_all_day){
+              Serial.print("-- Closed all day for ");
+            }else{
+              Serial.print("-- Open between ");
+                Serial.print(schedule[i].open_hour);
+                Serial.print(":");
+                Serial.print(schedule[i].open_min);
+                Serial.print(" and ");
+                Serial.print(schedule[i].close_hour);
+                Serial.print(":");
+                Serial.print(schedule[i].close_min);
+              Serial.print(" for ");
+            }
+            Serial.print(schedule[i].month);
+            Serial.print("/");
+            Serial.print(schedule[i].day);
+            Serial.print("/");
+            Serial.println(schedule[i].year);
+            continue;
+          }
+
+          if(schedule[i].dayofweek < 7){
+            if(schedule[i].closed_all_day){
+              Serial.print("-- Closed all day on ");
+            }else{
+              Serial.print("-- Open between ");
+                Serial.print(schedule[i].open_hour);
+                Serial.print(":");
+                Serial.print(schedule[i].open_min);
+                Serial.print(" and ");
+                Serial.print(schedule[i].close_hour);
+                Serial.print(":");
+                Serial.print(schedule[i].close_min);
+              Serial.print(" on ");
+            }
+            Serial.println(dayNames[schedule[i].dayofweek ]);
+            continue;
+          }
+
+          Serial.print("-- Open between ");
+
           Serial.print(schedule[i].open_hour);
+          Serial.print(":");
           Serial.print(schedule[i].open_min);
-          Serial.print(" ");
+          Serial.print(" and ");
           Serial.print(schedule[i].close_hour);
-          Serial.print(  schedule[i].close_min);
-          Serial.print(" ");
-          Serial.println(schedule[i].last);
-        // p("[trueindex %d] I%d R%d Y%d M%d D%d dow-%d (%d) %d:%d %d:%d %d\n",
-        // i,
-        // schedule[i].index,
-        // schedule[i].relaygroup,
-        // schedule[i].year,
-        // schedule[i].month,
-        // schedule[i].day,
-        // schedule[i].dayofweek,
-        // schedule[i].closed_all_day,
-        // schedule[i].open_hour,
-        // schedule[i].open_min,
-        // schedule[i].close_hour,
-        // schedule[i].close_min,
-        // schedule[i].last);
+          Serial.print(":");
+          Serial.println(schedule[i].close_min);
+
     }
 }
 
 
 
-int resolveDayStateOfSchedule(RtcDateTime dt, ScheduleType rule){
+uint8_t Scheduler::resolveDayStateOfSchedule(RtcDateTime dt, ScheduleType rule){
   //closed all day?
   if(rule.closed_all_day == 1){
     //SET RELAY CLOSED, RETURN, FINISHED LOOKING FOR RULE MATCH
@@ -102,6 +157,15 @@ int resolveDayStateOfSchedule(RtcDateTime dt, ScheduleType rule){
   int open = (rule.open_hour * 60) + rule.open_min;
   int close = (rule.close_hour * 60) + rule.close_min;
   int current = (dt.Hour() * 60) + dt.Minute();
+
+  minutes_till_open = current - open;
+  minutes_till_close = close - current;
+
+  if(minutes_till_open < 0) minutes_till_open = 0;
+  if(minutes_till_close < 0) minutes_till_close = 0;
+
+  //Serial.print(open); Serial.print(" "); Serial.print(close); Serial.print(" "); Serial.println(current);
+
   if(current >= open && current <= close){
     return DOOR_SCHEDULE_STATE_UNLOCKED;
   }else{
@@ -109,14 +173,29 @@ int resolveDayStateOfSchedule(RtcDateTime dt, ScheduleType rule){
   }
 }
 
-int Scheduler::getState(){
-  if(rules_count < 1) return -1;
+void Scheduler::status(){
+  if(minutes_till_open > 0){
+    Serial.print("Site will be opening in ");
+    Serial.print(minutes_till_open);
+    Serial.println(" Minutes");
+  }
+  if(minutes_till_close > 0){
+    Serial.print("Site will be closing in ");
+    Serial.print(minutes_till_close);
+    Serial.println(" Minutes");
+  }
+}
+
+uint8_t Scheduler::getState(){
+
+  if(rules_count < 1) return DOOR_SCHEDULE_STATE_LOCKED;
+
     RtcDateTime dt = _RTC.GetDateTime();
     for (int i=0; i<rules_count; i++)
     {
         //specific data
-        if(schedule[i].year > 0){
-          if(schedule[i].year == dt.Year()){
+        if(schedule[i].year != 255){
+          if(schedule[i].year == (dt.Year()-2000)){
             if(schedule[i].month == dt.Month()){
               if(schedule[i].day == dt.Day()){
 
@@ -141,8 +220,13 @@ int Scheduler::getState(){
           }
         }
 
+
+      }
+
+      for (int i=0; i<rules_count; i++)
+      {
         //look for day of week match
-        if(schedule[i].dayofweek > 0){
+        if(schedule[i].dayofweek != 255){
             if(schedule[i].dayofweek == dt.DayOfWeek()){
                 //we found a match for this specific DAY
                 return resolveDayStateOfSchedule(dt, schedule[i]);
@@ -153,8 +237,17 @@ int Scheduler::getState(){
               continue;
             }
         }
+      }
+
+      //last loop
+      for (int i=0; i<rules_count; i++)
+      {
+        if(schedule[i].dayofweek != 255 || schedule[i].year != 255) continue;
         //if we still made it here, the its just a open / close date entry
         return resolveDayStateOfSchedule(dt, schedule[i]);
+      }
+
+      //no rules matching, assume state of LOCKED
+      return DOOR_SCHEDULE_STATE_LOCKED;
 
     }
-}

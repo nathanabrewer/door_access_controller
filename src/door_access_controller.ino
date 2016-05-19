@@ -7,12 +7,60 @@
 #include <RtcDS3231.h>
 #include <RtcTemperature.h>
 #include <RtcUtility.h>
-#include <Cmd.h>
+
 
 #include <door.h>
 //#include <keypad.h>
 
 #include <scheduler.h>
+
+
+#include <stdint.h>
+typedef struct _cmd_t
+{
+    char *cmd;
+    void (*func)(int argc, char **argv);
+    struct _cmd_t *next;
+} cmd_t;
+// command line message buffer and pointer
+static uint8_t msg[50];
+static uint8_t *msg_ptr;
+
+// linked list for command table
+static cmd_t *cmd_tbl_list, *cmd_tbl;
+
+// text strings for command prompt (stored in flash)
+
+const char cmd_unrecog[] PROGMEM = "ERROR: unrecognized";
+
+void cmdAdd(char *name, void (*func)(int argc, char **argv))
+{
+    cmd_tbl = (cmd_t *)malloc(sizeof(cmd_t));// alloc memory for command struct
+    char *cmd_name = (char *)malloc(strlen(name)+1);// alloc memory for command name
+    strcpy(cmd_name, name);// copy command name
+    cmd_name[strlen(name)] = '\0';// terminate the command name
+    cmd_tbl->cmd = cmd_name;// fill out structure
+    cmd_tbl->func = func;
+    cmd_tbl->next = cmd_tbl_list;
+    cmd_tbl_list = cmd_tbl;
+}
+
+
+/*
+add sch 1 1 2016 05 15 -1 0 03 58 4 19 0
+add sch 2 1 -1 -1 -1 4 0 05 58 8 19 0
+add sch 4 1 -1 -1 -1 -1 0 1 22 5 54 1
+add sch 0 0 0 0 0 0 0 0 0 0 0 0
+
+[trueindex  0 1 1 2016 5 15 255 0 358 419 0
+[trueindex  1 1 1 2016 5 15 255 0 358 419 0
+[trueindex  2 1 1 2016 5 15 255 0 358 419 0
+[trueindex  3 1 1 2016 5 15 255 0 358 419 0
+[trueindex  4 1 4 -1 255 255 255 0 122 554 1
+[trueindex  5 1 4 -1 255 255 255 0 122 554 1
+[trueindex  6 10 10 10 10 10 10 10 1010 1010 20
+
+*/
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
@@ -23,79 +71,105 @@ int rules_count = 0;
 
 DoorSensor door1;
 DoorSensor door2;
-Scheduler schedule;
+Scheduler schedule1;
 //Keypad *keypad = new Keypad;
 
 
 void setup()
 {
-  cmdInit(57600);
+  msg_ptr = msg;
+  cmd_tbl_list = NULL;
+  Serial.begin(57600);
+
+
   RTCSetup();
   //keypad =  Keypad();
   door1.setPin(A0);
   door2.setPin(A1);
-  cmdAdd("say", command_say_hello);
+
+  schedule1.loadFromMemory(1);
+
   cmdAdd("add", command_add);
   cmdAdd("help", command_help);
   cmdAdd("list", command_list);
   cmdAdd("status", command_status);
-
-  Serial.println("add sch <index> <relaygroup> <yr> <mnth> <day> <dow> <closedallsay> <open_hour> <open_min> <close_hour> <close_min>");
-  Serial.println("");
-  Serial.println("When specifying year/month do not specify dayofweek");
-  Serial.println("-1 value instead of null");
-  Serial.println("");
-  Serial.println("> add sch 1 1 2016 05 15 -1 0 03 58 4 19 0");
-  Serial.println("> add sch 2 1 -1 -1 -1 -1 1 -1 -1 -1 -1 0");
-  Serial.println("> add sch 3 1 -1 -1 -1 -1 1 -1 -1 -1 -1 0");
-  Serial.println("> add sch 4 1 -1 -1 -1 -1 0 17 30 18 30 1");
-  Serial.println("");
-  Serial.println("try status date for the current time, list all for repeat of current schedule");
-  Serial.println("");
-
+  cmdAdd("clear", command_clear);
+  cmdAdd("save", command_save);
 
 }
+void command_help(int arg_cnt, char **args)
+{
+    Serial.println("help me         - this menu");
+    Serial.println("list all        - list current schedule");
+    Serial.println("add sch         - add to schedule");
+    Serial.println("clear all       - clear schedule");
+    Serial.println("status all      - stats... open/close, time, temp");
+
+}
+
+void command_save(int arg_ctn, char **args){
+  Serial.println("Saving Schedule...");
+  schedule1.save(1);
+}
+void command_clear(int arg_cnt, char **args){
+  Serial.println("Clearing Schedule...");
+  schedule1.clearAll();
+}
+
 void command_list(int arg_cnt, char **args){
-  schedule.list(args);
+  schedule1.list(args);
 }
+
 void loop()
 {
-  cmdPoll();
-  poll();
+
+  while (Serial.available())
+  {
+      cmd_handler();
+  }
+
+  loopCount++;
+  if(loopCount == 25500){
+    if (!Rtc.IsDateTimeValid()){
+        Serial.println("RTC lost confidence in the DateTime!");
+    }
+    loopCount=0;
+    schedule1.poll();
+    door1.poll();
+  }
 
   //keypad->poll();
   //sensorB->poll();
   //delay(100);
 }
+
 void command_status(int arg_cnt, char **args){
   RtcTemperature temp = Rtc.GetTemperature();
   RtcDateTime now = Rtc.GetDateTime();
+  schedule1.status();
 
+
+  Serial.print("Tempature of controller and RTC is currently ");
   Serial.print(temp.AsFloat());
-  Serial.print("C ");
+  Serial.println("C ");
+  Serial.print("Current Time: ");
   printDateTime(now);
-  p("\n");
+  Serial.println(" ");
+  Serial.println(" ");
 
-}
-
-void command_say_hello(int arg_cnt, char **args)
-{
-Serial.println("Hello.");
-}
-void command_help(int arg_cnt, char **args)
-{
-Serial.println("No Menu Help Yet.");
 }
 
 void command_add(int arg_cnt, char **args)
 {
   if(strcmp(args[1],"schedule")){
     if(arg_cnt < 14){
-      Serial.print("ERROR: Refusing to add Rule, Invalid argument count :");
-      Serial.print(arg_cnt);
+      Serial.println("Not a valid add command, Usage: ");
+      Serial.println(">> add sch <i> <rg> <yr> <mnth> <day> <dow> <oH> <oM> <cH> <cM> <lr>");
+      Serial.println("");
+      Serial.println("");
       return;
     }
-    return schedule.add(args);
+    return schedule1.add(args);
 
   }else{
     Serial.print("unknown ");
@@ -105,18 +179,7 @@ void command_add(int arg_cnt, char **args)
 
 }
 
-void poll(){
 
-    loopCount++;
-    if(loopCount == 25500){
-      if (!Rtc.IsDateTimeValid()){
-          Serial.println("RTC lost confidence in the DateTime!");
-      }
-      loopCount=0;
-      schedule.poll();
-      door1.poll();
-    }
-}
 
 
 
@@ -163,9 +226,8 @@ void printDateTime(const RtcDateTime& dt)
       dt.Minute(),
       dt.Second() );
     Serial.print(datestring);
-    Serial.println(dt.DayOfWeek());
-    Serial.println(dt.Year());
 }
+
 void p(char *fmt, ... ){
         char buf[128]; // resulting string limited to 128 chars
         va_list args;
@@ -174,4 +236,94 @@ void p(char *fmt, ... ){
         va_end (args);
         //rpi.print(buf);
         Serial.print(buf);
+}
+
+
+
+
+
+
+
+
+void cmd_display()
+{
+    char buf[50];
+    Serial.println();
+    Serial.println("DOOR CONTROLLER");
+    Serial.println("");
+    Serial.println("");
+    Serial.print("# ");
+}
+
+
+void cmd_parse(char *cmd)
+{
+    uint8_t argc, i = 0;
+    char *argv[30];
+    char buf[50];
+    cmd_t *cmd_entry;
+
+    fflush(stdout);
+
+    // parse the command line statement and break it up into space-delimited
+    // strings. the array of strings will be saved in the argv array.
+    argv[i] = strtok(cmd, " ");
+    do
+    {
+        argv[++i] = strtok(NULL, " ");
+    } while ((i < 30) && (argv[i] != NULL));
+
+    // save off the number of arguments for the particular command.
+    argc = i;
+
+    // parse the command table for valid command. used argv[0] which is the
+    // actual command name typed in at the prompt
+    for (cmd_entry = cmd_tbl; cmd_entry != NULL; cmd_entry = cmd_entry->next)
+    {
+        if (!strcmp(argv[0], cmd_entry->cmd))
+        {
+            cmd_entry->func(argc, argv);
+            cmd_display();
+            return;
+        }
+    }
+
+    // command not recognized. print message and re-generate prompt.
+    strcpy_P(buf, cmd_unrecog);
+    Serial.println(buf);
+
+    cmd_display();
+}
+
+
+void cmd_handler()
+{
+    char c = Serial.read();
+
+    switch (c)
+    {
+    case '\n':
+        // terminate the msg and reset the msg ptr. then send
+        // it to the handler for processing.
+        *msg_ptr = '\0';
+        Serial.print("\r\n");
+        cmd_parse((char *)msg);
+        msg_ptr = msg;
+        break;
+
+    case '\b':
+        // backspace
+        Serial.print(c);
+        if (msg_ptr > msg)
+        {
+            msg_ptr--;
+        }
+        break;
+
+    default:
+        // normal character entered. add it to the buffer
+        Serial.print(c);
+        *msg_ptr++ = c;
+        break;
+    }
 }
