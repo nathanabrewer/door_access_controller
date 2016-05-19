@@ -72,7 +72,7 @@ void Scheduler::save(uint8_t memConfigStart){
   Serial.print("Saved ");
   Serial.print(sizeof(schedule)+1);
   Serial.println(" bytes of data");
-  
+
 }
 
 void Scheduler::list(char **args){
@@ -144,12 +144,16 @@ void Scheduler::list(char **args){
 uint8_t Scheduler::resolveDayStateOfSchedule(RtcDateTime dt, ScheduleType rule){
   //closed all day?
   if(rule.closed_all_day == 1){
+    minutes_till_open = 0;
+    minutes_till_close = 0;
     //SET RELAY CLOSED, RETURN, FINISHED LOOKING FOR RULE MATCH
     return DOOR_SCHEDULE_STATE_LOCKED;
   }
 
   //open hours set?
   if(rule.open_hour < 0 || rule.close_hour < 0){
+    minutes_till_open = 0;
+    minutes_till_close = 0;
     Serial.println("Open or Close Hour not set. Error.");
     return -1;
   }
@@ -158,7 +162,7 @@ uint8_t Scheduler::resolveDayStateOfSchedule(RtcDateTime dt, ScheduleType rule){
   int close = (rule.close_hour * 60) + rule.close_min;
   int current = (dt.Hour() * 60) + dt.Minute();
 
-  minutes_till_open = current - open;
+  minutes_till_open = open - current;
   minutes_till_close = close - current;
 
   if(minutes_till_open < 0) minutes_till_open = 0;
@@ -247,6 +251,8 @@ uint8_t Scheduler::getState(){
         return resolveDayStateOfSchedule(dt, schedule[i]);
       }
 
+      minutes_till_open = 0;
+      minutes_till_close = 0;
       //no rules matching, assume state of LOCKED
       return DOOR_SCHEDULE_STATE_LOCKED;
 

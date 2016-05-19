@@ -1,4 +1,5 @@
-
+#include <Arduino.h>
+#line 1 "/Volumes/Brewer/Code/PlatformIO/door_access_controller/src/door_access_controller.ino"
 #include <Arduino.h>
 #include <LinkedList.h>
 #include <Wire.h>  // must be incuded here so that Arduino library object file references work
@@ -68,6 +69,47 @@ Scheduler schedule1;
 //Keypad *keypad = new Keypad;
 
 
+void setup();
+void command_help(int arg_cnt, char **args);
+
+void command_save(int arg_ctn, char **args);
+void command_clear(int arg_cnt, char **args);
+
+void command_list(int arg_cnt, char **args);
+
+void loop();
+void command_settime(int arg_cnt, char **args);
+
+void command_status(int arg_cnt, char **args);
+
+void command_add(int arg_cnt, char **args);
+
+
+
+
+
+
+void RTCSetup();
+
+void printDateTime(const RtcDateTime& dt);
+
+void p(char *fmt, ... );
+
+
+
+
+
+
+
+
+void cmd_display();
+
+
+void cmd_parse(char *cmd);
+
+
+void cmd_handler();
+#line 70 "/Volumes/Brewer/Code/PlatformIO/door_access_controller/src/door_access_controller.ino"
 void setup()
 {
   msg_ptr = msg;
