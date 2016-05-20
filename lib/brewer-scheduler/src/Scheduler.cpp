@@ -192,7 +192,11 @@ void Scheduler::status(){
 
 uint8_t Scheduler::getState(){
 
-  if(rules_count < 1) return DOOR_SCHEDULE_STATE_LOCKED;
+  if(rules_count < 1){
+    minutes_till_open = 0;
+    minutes_till_close = 0;
+    return DOOR_SCHEDULE_STATE_LOCKED;
+  }
 
     RtcDateTime dt = _RTC.GetDateTime();
     for (int i=0; i<rules_count; i++)

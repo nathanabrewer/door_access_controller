@@ -40,9 +40,10 @@ void cmdAdd(char *name, void (*func)(int argc, char **argv))
 
 
 /*
-add sch 1 1 2016 05 15 -1 0 03 58 4 19 0
+add sch 1 1 2016 05 19 -1 0 01 50 2 00 0
 add sch 2 1 -1 -1 -1 4 0 05 58 8 19 0
-add sch 4 1 -1 -1 -1 -1 0 2 30 5 54 1
+add sch 4 1 -1 -1 -1 -1 0 15 30 15 54 1
+add sch 4 1 -1 -1 -1 -1 0 15 30 15 54 1
 add sch 0 0 0 0 0 0 0 0 0 0 0 0
 
 [trueindex  0 1 1 2016 5 15 255 0 358 419 0
