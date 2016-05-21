@@ -3,6 +3,38 @@
 #include <RtcDS3231.h>
 #include "EEPROM.h"
 
+#define RELAY_STATE_NONE 0
+#define RELAY_STATE_UNLOCKED 1
+#define RELAY_STATE_LOCKED 2
+#define RELAY_STATE_FORCE_LOCK 3
+#define RELAY_STATE_INHERIT 4
+const char relayState[] = {"X", "U", "L", "F", "I"};
+
+#define SENSOR_STATE_NONE 0
+#define SENSOR_STATE_UNARMED 1
+#define SENSOR_STATE_CHIME 2
+#define SENSOR_STATE_ARMED 3
+#define SENSOR_STATE_INHERIT 4
+const char sensorState[] = {"X", "U", "C", "A", "I"};
+
+#define ENV_STATE_NONE 0
+#define ENV_STATE_UNARMED 1
+#define ENV_STATE_ARMED 2
+#define ENV_STATE_STAY 3
+#define ENV_STATE_FORCE_ARMED 4
+#define ENV_STATE_FORCE_DISARMED 5
+#define ENV_STATE_INHERIT 6
+const char envState[] = {"X", "U", "A", "S", "F", "O", "I"};
+
+#define RULE_FLAG_NONE 0
+#define RULE_FLAG_FINAL 1
+const char ruleFlag[] = {"X", "F"};
+
+#define DEFAULT_RELAY_STATE 2
+#define DEFAULT_SENSOR_STATE 1
+#define DEFAULT_ENV_STATE 1
+
+
 const char* dayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 void Scheduler::loadFromMemory(uint8_t memConfigStart){
@@ -24,25 +56,53 @@ void Scheduler::poll( )
   doorScheduleState = state;
 }
 
+uint8_t Scheduler::resolveSensorState(char key){
+  if(key == relayState[SENSOR_STATE_UNARMED]) return SENSOR_STATE_UNARMED;
+  if(key == relayState[SENSOR_STATE_CHIME]) return SENSOR_STATE_CHIME;
+  if(key == relayState[SENSOR_STATE_ARMED]) return SENSOR_STATE_ARMED;
+  if(key == relayState[SENSOR_STATE_INHERIT]) return SENSOR_STATE_INHERIT;
+  return SENSOR_STATE_NONE;
+}
+
+uint8_t Scheduler::resolveRelayState(char key){
+  if(key == relayState[RELAY_STATE_UNLOCKED]) return RELAY_STATE_UNLOCKED;
+  if(key == relayState[RELAY_STATE_LOCKED]) return RELAY_STATE_LOCKED;
+  if(key == relayState[RELAY_STATE_FORCE_LOCK]) return RELAY_STATE_FORCE_LOCK;
+  if(key == relayState[RELAY_STATE_INHERIT]) return RELAY_STATE_INHERIT;
+  return RELAY_STATE_NONE;
+}
 
 void Scheduler::add(char **args){
 
   Serial.print("Saved Rule to schedule slot: ");
   Serial.println(rules_count);
 
-  schedule[rules_count].relaygroup      = atoi(args[2]);
-  schedule[rules_count].index           = atoi(args[3]);
-  int year = atoi(args[4]);
+
+
+  int year = atoi(args[2]);
   if(year > 2000) year -= 2000;
   schedule[rules_count].year            = year;
-  schedule[rules_count].month           = atoi(args[5]);
-  schedule[rules_count].day             = atoi(args[6]);
-  schedule[rules_count].dayofweek       = atoi(args[7]);
-  schedule[rules_count].closed_all_day  = atoi(args[8]);
-  schedule[rules_count].open_hour       = atoi(args[9]);
-  schedule[rules_count].open_min        = atoi(args[10]);
-  schedule[rules_count].close_hour      = atoi(args[11]);
-  schedule[rules_count].close_min       = atoi(args[12]);
+  schedule[rules_count].month           = atoi(args[3]);
+  schedule[rules_count].day             = atoi(args[4]);
+  schedule[rules_count].dow             = atoi(args[5]);
+  schedule[rules_count].open_hour       = atoi(args[6]);
+  schedule[rules_count].open_min        = atoi(args[7]);
+  schedule[rules_count].close_hour      = atoi(args[8]);
+  schedule[rules_count].close_min       = atoi(args[9]);
+  schedule[rules_count].door1_relay = resolveRelayState(args[2][0]);
+  schedule[rules_count].door1_sensor = resolveSensorState(args[2][0]);
+
+  schedule[rules_count].door2_relay = resolveRelayState(args[2][0]);
+  schedule[rules_count].door2_sensor = resolveSensorState(args[2][0]);
+
+  schedule[rules_count].door3_relay = resolveRelayState(args[2][0]);
+  schedule[rules_count].door3_sensor = resolveSensorState(args[2][0]);
+
+  schedule[rules_count].door4_relay = resolveRelayState(args[2][0]);
+  schedule[rules_count].door4_sensor = resolveSensorState(args[2][0]);
+
+
+
   rules_count++;
 
 }

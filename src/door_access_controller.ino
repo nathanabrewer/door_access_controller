@@ -8,7 +8,7 @@
 #include <RtcTemperature.h>
 #include <RtcUtility.h>
 #include <door.h>
-//#include <keypad.h>
+#include <keypad.h>
 
 #include <scheduler.h>
 
@@ -66,7 +66,8 @@ int rules_count = 0;
 DoorSensor door1;
 DoorSensor door2;
 Scheduler schedule1;
-//Keypad *keypad = new Keypad;
+
+Keypad keypad;
 
 
 void setup()
@@ -134,11 +135,10 @@ void loop()
     loopCount=0;
     schedule1.poll();
     door1.poll();
+    keypad.poll();
+
   }
 
-  //keypad->poll();
-  //sensorB->poll();
-  //delay(100);
 }
 void command_settime(int arg_cnt, char **args){
   RtcDateTime settime = RtcDateTime(args[1], args[2]);

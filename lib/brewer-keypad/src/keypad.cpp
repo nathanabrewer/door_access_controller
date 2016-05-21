@@ -4,6 +4,7 @@
 
 Keypad::Keypad(){
   wg.begin();
+  
 }
 
 // int DoorSensor::getValue(){
