@@ -1,6 +1,7 @@
 
 #include <Arduino.h>
 #include <LinkedList.h>
+#include <Streaming.h>
 #include <Wire.h>  // must be incuded here so that Arduino library object file references work
 #include <RtcDateTime.h>
 #include <RtcDS1307.h>
@@ -19,7 +20,7 @@ typedef struct _cmd_t
     void (*func)(int argc, char **argv);
     struct _cmd_t *next;
 } cmd_t;
-static uint8_t msg[50]; // command line message buffer and pointer
+static uint8_t msg[60]; // command line message buffer and pointer
 static uint8_t *msg_ptr;
 
 // linked list for command table
@@ -37,24 +38,6 @@ void cmdAdd(char *name, void (*func)(int argc, char **argv))
     cmd_tbl->next = cmd_tbl_list;
     cmd_tbl_list = cmd_tbl;
 }
-
-
-/*
-add sch 1 1 2016 05 19 -1 0 01 50 2 00 0
-add sch 2 1 -1 -1 -1 4 0 05 58 8 19 0
-add sch 4 1 -1 -1 -1 -1 0 15 30 15 54 1
-add sch 4 1 -1 -1 -1 -1 0 15 30 15 54 1
-add sch 0 0 0 0 0 0 0 0 0 0 0 0
-
-[trueindex  0 1 1 2016 5 15 255 0 358 419 0
-[trueindex  1 1 1 2016 5 15 255 0 358 419 0
-[trueindex  2 1 1 2016 5 15 255 0 358 419 0
-[trueindex  3 1 1 2016 5 15 255 0 358 419 0
-[trueindex  4 1 4 -1 255 255 255 0 122 554 1
-[trueindex  5 1 4 -1 255 255 255 0 122 554 1
-[trueindex  6 10 10 10 10 10 10 10 1010 1010 20
-
-*/
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
@@ -98,20 +81,19 @@ void setup()
 }
 void command_help(int arg_cnt, char **args)
 {
-    Serial.println("help me         - this menu");
-    Serial.println("list all        - list current schedule");
-    Serial.println("add sch         - add to schedule");
-    Serial.println("clear all       - clear schedule");
-    Serial.println("status all      - stats... open/close, time, temp");
-
+    Serial << "help me \tthis menu" << endl;
+    Serial << "list all \tlist current schedule" << endl;
+    Serial << "add sch \tadd to schedule" << endl;
+    Serial << "clear all \tclear schedule" << endl;
+    Serial << "status all \tstats... open/close, time, temp" << endl;
 }
 
 void command_save(int arg_ctn, char **args){
-  Serial.println("Saving Schedule...");
+  Serial << "Saving Schedule..." << endl;
   schedule1.save(1);
 }
 void command_clear(int arg_cnt, char **args){
-  Serial.println("Clearing Schedule...");
+  Serial << "Clearing Schedule..." << endl;
   schedule1.clearAll();
 }
 
@@ -283,12 +265,9 @@ void cmd_parse(char *cmd)
 
     // parse the command table for valid command. used argv[0] which is the
     // actual command name typed in at the prompt
+
     for (cmd_entry = cmd_tbl; cmd_entry != NULL; cmd_entry = cmd_entry->next)
     {
-
-      Serial.println(cmd_entry->cmd);
-      Serial.println(argv[0]);
-
         if (strcmp(argv[0], cmd_entry->cmd) == 0)
         {
             cmd_entry->func(argc, argv);

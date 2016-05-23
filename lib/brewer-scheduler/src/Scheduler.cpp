@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <Streaming.h>
+
 #include "Scheduler.h"
 #include <RtcDS3231.h>
 #include "EEPROM.h"
@@ -8,14 +10,14 @@
 #define RELAY_STATE_LOCKED 2
 #define RELAY_STATE_FORCE_LOCK 3
 #define RELAY_STATE_INHERIT 4
-const unsigned char relayState[] = {'X', 'U','L', 'F', 'I'};
+const signed char relayState[] = {'X', 'U','L', 'F', 'I'};
 
 #define SENSOR_STATE_NONE 0
 #define SENSOR_STATE_UNARMED 1
 #define SENSOR_STATE_CHIME 2
 #define SENSOR_STATE_ARMED 3
 #define SENSOR_STATE_INHERIT 4
-const unsigned char sensorState[] = {'X','U','C','A','I'};
+const signed char sensorState[] = {'X','U','C','A','I'};
 
 #define ENV_STATE_NONE 0
 #define ENV_STATE_UNARMED 1
@@ -24,11 +26,11 @@ const unsigned char sensorState[] = {'X','U','C','A','I'};
 #define ENV_STATE_FORCE_ARMED 4
 #define ENV_STATE_FORCE_DISARMED 5
 #define ENV_STATE_INHERIT 6
-const unsigned char envState[] = {'X','U','A','S','F','O','I'};
+const signed char envState[] = {'X','U','A','S','F','O','I'};
 
 #define RULE_FLAG_NONE 0
 #define RULE_FLAG_FINAL 1
-const unsigned char ruleFlag[] = {'X','F'};
+const signed char ruleFlag[] = {'X','F'};
 
 #define DEFAULT_RELAY_STATE 2
 #define DEFAULT_SENSOR_STATE 1
@@ -57,7 +59,6 @@ void Scheduler::poll( )
 }
 
 uint8_t Scheduler::resolveSensorState(char key){
-  if(key == relayState[SENSOR_STATE_UNARMED]) Serial.println("SENSOR_STATE_UNARMED");
   if(key == relayState[SENSOR_STATE_UNARMED]) return SENSOR_STATE_UNARMED;
   if(key == relayState[SENSOR_STATE_CHIME]) return SENSOR_STATE_CHIME;
   if(key == relayState[SENSOR_STATE_ARMED]) return SENSOR_STATE_ARMED;
@@ -75,8 +76,8 @@ uint8_t Scheduler::resolveRelayState(char key){
 
 void Scheduler::add(char **args){
 
-  Serial.print("Saved Rule to schedule slot: ");
-  Serial.println(rules_count);
+  Serial << "Saved Rule to schedule slot: " << endl;
+  Serial << rules_count << endl;
 
   int year = atoi(args[2]);
   if(year > 2000) year -= 2000;
@@ -89,6 +90,7 @@ void Scheduler::add(char **args){
   schedule[rules_count].close_hour      = atoi(args[8]);
   schedule[rules_count].close_min       = atoi(args[9]);
 
+
   schedule[rules_count].door1_relay = resolveRelayState(args[10][0]);
   schedule[rules_count].door1_sensor = resolveSensorState(args[10][1]);
 
@@ -100,7 +102,6 @@ void Scheduler::add(char **args){
 
   schedule[rules_count].door4_relay = resolveRelayState(args[13][0]);
   schedule[rules_count].door4_sensor = resolveSensorState(args[13][1]);
-
 
 
   rules_count++;
@@ -137,66 +138,31 @@ void Scheduler::save(uint8_t memConfigStart){
 
 void Scheduler::list(char **args){
           Serial.println("- Basic Door Controller [ Scheduled Rule Index ]");
+
     for (int i=0; i<rules_count; i++)
     {
-          //Serial.print("- ");
-          //Serial.print(i);
-          //Serial.print(".");
-          //Serial.println(schedule[i].index);
-          //Serial.print("- Relay Group ");
-          //Serial.println(schedule[i].relaygroup);
-
-          if(schedule[i].year != 255){
-            // if(schedule[i].closed_all_day){
-            //   Serial.print("-- Closed all day for ");
-            // }else{
-              Serial.print("-- Open between ");
-                Serial.print(schedule[i].open_hour);
-                Serial.print(":");
-                Serial.print(schedule[i].open_min);
-                Serial.print(" and ");
-                Serial.print(schedule[i].close_hour);
-                Serial.print(":");
-                Serial.print(schedule[i].close_min);
-              Serial.print(" for ");
-          //  }
-
-            Serial.print(schedule[i].month);
-            Serial.print("/");
-            Serial.print(schedule[i].day);
-            Serial.print("/");
-            Serial.println(schedule[i].year);
-            continue;
-          }
-
-          if(schedule[i].dow < 7){
-            // if(schedule[i].closed_all_day){
-            //   Serial.print("-- Closed all day on ");
-            // }else{
-              Serial.print("-- Open between ");
-                Serial.print(schedule[i].open_hour);
-                Serial.print(":");
-                Serial.print(schedule[i].open_min);
-                Serial.print(" and ");
-                Serial.print(schedule[i].close_hour);
-                Serial.print(":");
-                Serial.print(schedule[i].close_min);
-              Serial.print(" on ");
-          //  }
-            Serial.println(dayNames[schedule[i].dow ]);
-            continue;
-          }
-
-          Serial.print("-- Open between ");
-
-          Serial.print(schedule[i].open_hour);
-          Serial.print(":");
-          Serial.print(schedule[i].open_min);
-          Serial.print(" and ");
-          Serial.print(schedule[i].close_hour);
-          Serial.print(":");
-          Serial.println(schedule[i].close_min);
-
+      Serial << (2000 + schedule[i].year)
+      << "-" << schedule[i].month
+      << "-" << schedule[i].day
+      << "\t" << schedule[i].dow
+      << "\t" << schedule[i].open_hour << ":" << schedule[i].open_min << "-" << schedule[i].close_hour<< ":" << schedule[i].close_min
+      << "\t"
+        << _BYTE(relayState[ schedule[i].door1_relay])
+        << _BYTE(sensorState[schedule[i].door1_sensor])
+      << "\t"
+        << _BYTE(relayState[ schedule[i].door2_relay ])
+        << _BYTE(sensorState[schedule[i].door2_sensor])
+      << "\t"
+        << _BYTE(relayState[ schedule[i].door3_relay])
+        << _BYTE(sensorState[schedule[i].door3_sensor])
+      << "\t"
+        << _BYTE(relayState[ schedule[i].door4_relay])
+        << _BYTE(sensorState[schedule[i].door4_sensor])
+      << "\t"
+        << _BYTE(envState[ schedule[i].env_flag ])
+      << "\t"
+        << _BYTE(ruleFlag[ schedule[i].rule_flag ])
+        << endl;
     }
 }
 
