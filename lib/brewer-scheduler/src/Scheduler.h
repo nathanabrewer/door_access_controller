@@ -40,6 +40,8 @@ private:
     ScheduleType schedule[MAX_SCHEDULE_SIZE];
     int minutes_till_open;
     int minutes_till_close;
+    uint8_t resolveRelayState(char key);
+    uint8_t resolveSensorState(char key);
 public:
     void poll();
     uint8_t getState();

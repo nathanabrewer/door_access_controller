@@ -285,6 +285,10 @@ void cmd_parse(char *cmd)
     // actual command name typed in at the prompt
     for (cmd_entry = cmd_tbl; cmd_entry != NULL; cmd_entry = cmd_entry->next)
     {
+
+      Serial.println(cmd_entry->cmd);
+      Serial.println(argv[0]);
+
         if (strcmp(argv[0], cmd_entry->cmd) == 0)
         {
             cmd_entry->func(argc, argv);
