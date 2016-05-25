@@ -75,10 +75,10 @@ thoughts on schedule entries
 +SCH * * * * 00 00 23 59 LA LA LA LA A 100
 
 ## User entries
-| UID | keycode | cardcode | keycode_req  | cardcode_req  |      | Door1 | Door2 | Door3 | Door4 | Site |
-|-----|---------|----------|--------------|---------------|------|-------|-------|-------|-------|------|
-| 10  | 6321055 |  16444   |      N       |     Y         |      |       |       |       |       |      |
-| 11  | 6322055 |  17322   |      Y       |     Y         |  LU  | G     | G     | A     | S     | S    |
+| UID | keycode | cardcode | kc_req  | cc_req  | Door1 | Door2 | Door3 | Door4 | Site |
+|-----|---------|----------|---------|---------|-------|-------|-------|-------|------|
+| 10  | 6321055 |  16444   |   N     |   Y     |       |       |       |       |      |
+| 11  | 6322055 |  17322   |   Y     |   Y     | G     | G     | A     | S     | S    |
 
 ### Door Level Access
 - G - Guest
