@@ -1,43 +1,22 @@
 
 #include <Arduino.h>
-#include <LinkedList.h>
 #include <Streaming.h>
 #include <Wire.h>  // must be incuded here so that Arduino library object file references work
 #include <RtcDateTime.h>
-#include <RtcDS1307.h>
+// #include <RtcDS1307.h>
 #include <RtcDS3231.h>
 #include <RtcTemperature.h>
 #include <RtcUtility.h>
+
 #include <door.h>
-#include <keypad.h>
+#include "keypad.h"
+#include "scheduler.h"
 
-#include <scheduler.h>
+#include <avr/pgmspace.h>
 
 
-typedef struct _cmd_t
-{
-    char *cmd;
-    void (*func)(int argc, char **argv);
-    struct _cmd_t *next;
-} cmd_t;
 static uint8_t msg[60]; // command line message buffer and pointer
 static uint8_t *msg_ptr;
-
-// linked list for command table
-static cmd_t *cmd_tbl_list, *cmd_tbl;
-
-
-void cmdAdd(char *name, void (*func)(int argc, char **argv))
-{
-    cmd_tbl = (cmd_t *)malloc(sizeof(cmd_t));// alloc memory for command struct
-    char *cmd_name = (char *)malloc(strlen(name)+1);// alloc memory for command name
-    strcpy(cmd_name, name);// copy command name
-    cmd_name[strlen(name)] = '\0';// terminate the command name
-    cmd_tbl->cmd = cmd_name;// fill out structure
-    cmd_tbl->func = func;
-    cmd_tbl->next = cmd_tbl_list;
-    cmd_tbl_list = cmd_tbl;
-}
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
@@ -56,7 +35,7 @@ Keypad keypad;
 void setup()
 {
   msg_ptr = msg;
-  cmd_tbl_list = NULL;
+
   Serial.begin(57600);
 
 
@@ -67,48 +46,42 @@ void setup()
 
   schedule1.loadFromMemory(1);
 
-  cmdAdd("add", command_add);
-  cmdAdd("help", command_help);
-  cmdAdd("list", command_list);
-  cmdAdd("status", command_status);
-  cmdAdd("clear", command_clear);
-  cmdAdd("save", command_save);
-  cmdAdd("settime", command_settime);
-
 
   cmd_display();
 
 }
-void command_help(int arg_cnt, char **args)
+void command_help()
 {
-    Serial << "help me \tthis menu" << endl;
-    Serial << "list all \tlist current schedule" << endl;
-    Serial << "add sch \tadd to schedule" << endl;
-    Serial << "clear all \tclear schedule" << endl;
-    Serial << "status all \tstats... open/close, time, temp" << endl;
+    Serial.println(F("help\tthis menu"));
+    Serial.println(F("list\tlist current schedule"));
+    Serial.println(F("add\tadd to schedule"));
+    Serial.println(F("clear\tclear schedule"));
+    Serial.println(F("status\tstats... open/close, time, temp"));
+    Serial.println(F("set time <SecondsSince2000>\tSet the Time, Duh"));
+    //JS: Math.floor((b.getTime() - a.getTime())/1000)-(7*60*60);
 }
 
-void command_save(int arg_ctn, char **args){
+void command_save(){
   Serial << "Saving Schedule..." << endl;
   schedule1.save(1);
 }
-void command_clear(int arg_cnt, char **args){
+void command_clear(){
   Serial << "Clearing Schedule..." << endl;
   schedule1.clearAll();
 }
 
-void command_list(int arg_cnt, char **args){
-  schedule1.list(args);
+void command_list(){
+  schedule1.list();
 }
+
+
 
 void loop()
 {
-
   while (Serial.available())
   {
       cmd_handler();
   }
-
   loopCount++;
   if(loopCount == 25500){
     if (!Rtc.IsDateTimeValid()){
@@ -118,56 +91,28 @@ void loop()
     schedule1.poll();
     door1.poll();
     keypad.poll();
-
   }
-
-}
-void command_settime(int arg_cnt, char **args){
-  RtcDateTime settime = RtcDateTime(args[1], args[2]);
-  Serial.println("Setting Date Time");
-  Rtc.SetDateTime(settime);
-
 }
 
-void command_status(int arg_cnt, char **args){
+
+
+void command_status(){
   RtcTemperature temp = Rtc.GetTemperature();
   RtcDateTime now = Rtc.GetDateTime();
   schedule1.status();
 
 
-  Serial.print("Tempature of controller and RTC is currently ");
+  Serial.print(F("Tempature of controller and RTC is currently "));
   Serial.print(temp.AsFloat());
   Serial.println("C ");
-  Serial.print("Current Time: ");
+  Serial.print(F("Current Time: "));
   printDateTime(now);
   Serial.println(" ");
+  Serial.print(F("free SRAM: "));
+  Serial.println(freeRam());
   Serial.println(" ");
 
 }
-
-void command_add(int arg_cnt, char **args)
-{
-  if(strcmp(args[1],"schedule")){
-    if(arg_cnt < 14){
-      Serial.println("Not a valid add command, Usage: ");
-      Serial.println(">> add sch <i> <rg> <yr> <mnth> <day> <dow> <oH> <oM> <cH> <cM> <lr>");
-      Serial.println("");
-      Serial.println("");
-      return;
-    }
-    return schedule1.add(args);
-
-  }else{
-    Serial.print("unknown ");
-    Serial.println(args[1]);
-
-  }
-
-}
-
-
-
-
 
 
 void RTCSetup(){
@@ -245,40 +190,74 @@ void cmd_display()
     Serial.print("# ");
 }
 
-
+const char testcommand[] = "TEST";
 void cmd_parse(char *cmd)
 {
-    uint8_t argc, i = 0;
-    char *argv[30];
-    char buf[50];
-    cmd_t *cmd_entry;
-    // parse the command line statement and break it up into space-delimited
-    // strings. the array of strings will be saved in the argv array.
-    argv[i] = strtok(cmd, " ");
-    do
-    {
-        argv[++i] = strtok(NULL, " ");
-    } while ((i < 30) && (argv[i] != NULL));
+  uint8_t i;
+  char *argv[30];
 
-    // save off the number of arguments for the particular command.
-    argc = i;
+  argv[i] = strtok(cmd, " ");
+  do { argv[++i] = strtok(NULL, " ");
+  } while ((i < 30) && (argv[i] != NULL));
 
-    // parse the command table for valid command. used argv[0] which is the
-    // actual command name typed in at the prompt
+  if (memcmp(argv[0], "save", 4) == 0)
+    return command_save();
 
-    for (cmd_entry = cmd_tbl; cmd_entry != NULL; cmd_entry = cmd_entry->next)
-    {
-        if (strcmp(argv[0], cmd_entry->cmd) == 0)
-        {
-            cmd_entry->func(argc, argv);
-            cmd_display();
-            return;
-        }
+  if (memcmp(argv[0], "help", 4) == 0)
+    return command_help();
+
+  if (memcmp(argv[0], "list", 4) == 0)
+    return command_list();
+
+  if (memcmp(argv[0], "clear", 5) == 0)
+    return command_clear();
+
+  if (memcmp(argv[0], "status", 6) == 0)
+    return command_status();
+
+  if (memcmp(argv[0], "set", 3) == 0){
+    if (memcmp(argv[1], "time", 3) == 0){
+          int32_t t = atol(argv[2]);
+
+          RtcDateTime settime = RtcDateTime(t);
+          Serial.print("Setting Date Time: ");
+          Serial.println(t);
+          Rtc.SetDateTime(settime);
+          return;
     }
-    Serial.println("Unknown Command");
-    cmd_display();
+  }
+
+  if (memcmp(argv[0], "+SCH", 3) == 0) {
+    if(argv[14][0] != 'X' && argv[14][0] != 'F'){
+      Serial.println(F("General Error with formatting +SCH command."));
+      Serial.println(F("Example:"));
+      Serial.println(F("+SCH 2016 05 255 255 01 00 05 00 LU LU LU LU O X"));
+      Serial.println(F("+SCH 255 255 255 255 00 00 23 59 LA LA LA LA A X"));
+
+      return;
+    }
+    schedule1.add(argv);
+    return;
+
+    // char *ptr = &cmd[0];
+    // ptr = &cmd[5];
+    //     char year[5];
+    //     memcpy ( year, ptr, 4 );
+    //     year[5] = '\0';
+    //     ptr += 5;
+  }
+
+  Serial.println(F("Unknown Command (try help)"));
+  Serial.println(F("---------------------------------"));
+
 }
 
+int freeRam ()
+{
+  extern int __heap_start, *__brkval;
+  int v;
+  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
+}
 
 void cmd_handler()
 {

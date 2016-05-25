@@ -1,4 +1,3 @@
-#include <LinkedList.h>
 #include <RtcDS3231.h>
 
 #define DOOR_SCHEDULE_STATE_UNLOCKED 0
@@ -28,6 +27,8 @@ class ScheduleType {
     uint8_t door4_sensor;
     uint8_t env_flag;
     uint8_t rule_flag;
+    uint8_t metric;
+    bool match;
 };
 
 
@@ -44,9 +45,10 @@ private:
     uint8_t resolveSensorState(char key);
 public:
     void poll();
+    void sort();
     uint8_t getState();
     void add(char **args);
-    void list(char **args);
+    void list();
     void save(uint8_t memConfigStart);
     void loadFromMemory(uint8_t memConfigStart);
     void clearAll();

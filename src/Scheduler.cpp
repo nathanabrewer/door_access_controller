@@ -5,6 +5,8 @@
 #include <RtcDS3231.h>
 #include "EEPROM.h"
 
+#define MATCH_ANY 255
+
 #define RELAY_STATE_NONE 0
 #define RELAY_STATE_UNLOCKED 1
 #define RELAY_STATE_LOCKED 2
@@ -79,31 +81,43 @@ void Scheduler::add(char **args){
   Serial << "Saved Rule to schedule slot: " << endl;
   Serial << rules_count << endl;
 
-  int year = atoi(args[2]);
+  int year = atoi(args[1]);
   if(year > 2000) year -= 2000;
   schedule[rules_count].year            = year;
-  schedule[rules_count].month           = atoi(args[3]);
-  schedule[rules_count].day             = atoi(args[4]);
-  schedule[rules_count].dow             = atoi(args[5]);
-  schedule[rules_count].open_hour       = atoi(args[6]);
-  schedule[rules_count].open_min        = atoi(args[7]);
-  schedule[rules_count].close_hour      = atoi(args[8]);
-  schedule[rules_count].close_min       = atoi(args[9]);
+  schedule[rules_count].month           = atoi(args[2]);
+  schedule[rules_count].day             = atoi(args[3]);
+  schedule[rules_count].dow             = atoi(args[4]);
+  schedule[rules_count].open_hour       = atoi(args[5]);
+  schedule[rules_count].open_min        = atoi(args[6]);
+  schedule[rules_count].close_hour      = atoi(args[7]);
+  schedule[rules_count].close_min       = atoi(args[8]);
 
 
-  schedule[rules_count].door1_relay = resolveRelayState(args[10][0]);
-  schedule[rules_count].door1_sensor = resolveSensorState(args[10][1]);
+  schedule[rules_count].door1_relay = resolveRelayState(args[9][0]);
+  schedule[rules_count].door1_sensor = resolveSensorState(args[9][1]);
 
-  schedule[rules_count].door2_relay = resolveRelayState(args[11][0]);
-  schedule[rules_count].door2_sensor = resolveSensorState(args[11][1]);
+  schedule[rules_count].door2_relay = resolveRelayState(args[10][0]);
+  schedule[rules_count].door2_sensor = resolveSensorState(args[10][1]);
 
-  schedule[rules_count].door3_relay = resolveRelayState(args[12][0]);
-  schedule[rules_count].door3_sensor = resolveSensorState(args[12][1]);
+  schedule[rules_count].door3_relay = resolveRelayState(args[11][0]);
+  schedule[rules_count].door3_sensor = resolveSensorState(args[11][1]);
 
-  schedule[rules_count].door4_relay = resolveRelayState(args[13][0]);
-  schedule[rules_count].door4_sensor = resolveSensorState(args[13][1]);
+  schedule[rules_count].door4_relay = resolveRelayState(args[12][0]);
+  schedule[rules_count].door4_sensor = resolveSensorState(args[12][1]);
 
+  schedule[rules_count].env_flag = ENV_STATE_NONE;
+  schedule[rules_count].rule_flag  = RULE_FLAG_NONE;
 
+  for (int i=0; i<6; i++)
+  {
+    if(args[13][0] == envState[i]){
+      schedule[rules_count].env_flag = i;
+      break;
+    }
+  }
+  if(args[14][0] == ruleFlag[RULE_FLAG_FINAL]){
+    schedule[rules_count].rule_flag = RULE_FLAG_FINAL;
+  }
   rules_count++;
 
 }
@@ -136,17 +150,44 @@ void Scheduler::save(uint8_t memConfigStart){
 
 }
 
-void Scheduler::list(char **args){
-          Serial.println("- Basic Door Controller [ Scheduled Rule Index ]");
+void printPad(int8_t num){
+  if(num == 255 || num == -1){
+    Serial.print("ANY");
+    return;
+  }
+  if(num < 9){
+    Serial.print("0");
+  }
+  Serial.print(num);
+}
+
+void Scheduler::list(){
+
+    Serial.println(F("-- Basic Door Controller"));
+    Serial.println(F("YEAR-MONTH-DAY\tDOW\tSTART-END\tDR1\tDR2\tDR3\tDR4\tSITE\tRULE\t_metric\t_match"));
 
     for (int i=0; i<rules_count; i++)
     {
-      Serial << (2000 + schedule[i].year)
-      << "-" << schedule[i].month
-      << "-" << schedule[i].day
-      << "\t" << schedule[i].dow
-      << "\t" << schedule[i].open_hour << ":" << schedule[i].open_min << "-" << schedule[i].close_hour<< ":" << schedule[i].close_min
-      << "\t"
+      Serial << "20";
+      printPad(schedule[i].year);
+      Serial << "-";
+      printPad(schedule[i].month);
+      Serial << "-";
+      printPad(schedule[i].day);
+
+      Serial << "\t";
+      printPad(schedule[i].dow);
+      Serial << "\t";
+
+      printPad(schedule[i].open_hour);
+      Serial << ":";
+      printPad(schedule[i].open_min);
+      Serial << "-";
+      printPad(schedule[i].close_hour);
+      Serial << ":";
+      printPad(schedule[i].close_min);
+
+      Serial << "\t"
         << _BYTE(relayState[ schedule[i].door1_relay])
         << _BYTE(sensorState[schedule[i].door1_sensor])
       << "\t"
@@ -162,26 +203,33 @@ void Scheduler::list(char **args){
         << _BYTE(envState[ schedule[i].env_flag ])
       << "\t"
         << _BYTE(ruleFlag[ schedule[i].rule_flag ])
-        << endl;
+      << "\t"
+        << _DEC(schedule[i].metric)
+      << "\t"
+        << _DEC(schedule[i].match)
+      << endl;
     }
 }
 
-
+// void Scheduler::sort() {
+//     for(int i=0; i<rules_count; i++) {
+//         for(int o=0; o<(rules_count-1+i); o++) {
+//                 if(schedule[o].metric > schedule[o+1].metric) {
+//                     ScheduleType t = schedule[o];
+//                     schedule[o] = schedule[o+1];
+//                     schedule[o+1] = t;
+//                 }
+//         }
+//     }
+// }
 
 uint8_t Scheduler::resolveDayStateOfSchedule(RtcDateTime dt, ScheduleType rule){
-  //closed all day?
-  // if(rule.closed_all_day == 1){
-  //   minutes_till_open = 0;
-  //   minutes_till_close = 0;
-  //   //SET RELAY CLOSED, RETURN, FINISHED LOOKING FOR RULE MATCH
-  //   return DOOR_SCHEDULE_STATE_LOCKED;
-  // }
 
   //open hours set?
   if(rule.open_hour < 0 || rule.close_hour < 0){
     minutes_till_open = 0;
     minutes_till_close = 0;
-    Serial.println("Open or Close Hour not set. Error.");
+    Serial << "Open or Close Hour not set. Error." << endl;
     return -1;
   }
   //so... are we open?  ...24h format, convert to minutes
@@ -226,65 +274,70 @@ uint8_t Scheduler::getState(){
   }
 
     RtcDateTime dt = _RTC.GetDateTime();
-    for (int i=0; i<rules_count; i++)
+    for (uint8_t i=0; i<rules_count; i++)
     {
-        //specific data
-        if(schedule[i].year != 255){
-          if(schedule[i].year == (dt.Year()-2000)){
-            if(schedule[i].month == dt.Month()){
-              if(schedule[i].day == dt.Day()){
+      schedule[i].metric = 0;
+      schedule[i].match = false;
+    }
 
-                  //we found a match for this specific DAY
-                  return resolveDayStateOfSchedule(dt, schedule[i]);
+    for (uint8_t i=0; i<rules_count; i++)
+    {
+        //specific date. Is exact match, metric point.
+        //no exact match, look for ANY match, no metric point
 
-
-              }else{
-                // Specific Date, but no day match, we can continue out of this for loop
-                // look for other matching rules, but we are done looking at this rule
-                continue;
-              }
-            }else{
-              // Specific Date, but no month match, we can continue out of this for loop
-              // look for other matching rules, but we are done looking at this rule
-              continue;
-            }
-          }else{
-            // Specific Date, but no match on year, we can continue out of this for loop
-            // look for other matching rules, but we are done looking at this rule
+        if(schedule[i].year == (dt.Year()-2000) ){
+          schedule[i].metric+=50;
+        }else{
+          if(schedule[i].year != MATCH_ANY)
             continue;
-          }
         }
 
-
-      }
-
-      for (int i=0; i<rules_count; i++)
-      {
-        //look for day of week match
-        if(schedule[i].dow != 255){
-            if(schedule[i].dow == dt.DayOfWeek()){
-                //we found a match for this specific DAY
-                return resolveDayStateOfSchedule(dt, schedule[i]);
-
-            }else{
-              // Specific DayOfWeek set, but not this day of week, we can contineu out of this for loop
-              // look for other matching rules, but we are done looking at this rule
-              continue;
-            }
+        if(schedule[i].month == dt.Month() ){
+          schedule[i].metric+=50;
+        }else{
+          if(schedule[i].month != MATCH_ANY)
+            continue;
         }
+
+        if(schedule[i].day == dt.Day() ){
+          schedule[i].metric+=50;
+        }else{
+          if(schedule[i].day != MATCH_ANY)
+            continue;
+
+        }
+
+        if(schedule[i].dow == dt.DayOfWeek() ){
+          schedule[i].metric+=50;
+        }else{
+          if(schedule[i].dow != MATCH_ANY)
+            continue;
+
+        }
+
+        if(schedule[i].metric > 150){
+          //THIS IS NOT VALID, match my year, month, day, and dow??
+        }
+
+        int open = (schedule[i].open_hour * 60) + schedule[i].open_min;
+        int close = (schedule[i].close_hour * 60) + schedule[i].close_min;
+        int current = (dt.Hour() * 60) + dt.Minute();
+
+        if(current >= open && current <= close){
+          schedule[i].match = true;
+          int tm = ( ( ((1440 - (close - open) ) * 100) /1440 ) * 50 )/ 100;
+          schedule[i].metric+=tm;
+        }
+
+        //
+        // minutes_till_open = open - current;
+        // minutes_till_close = close - current;
+        //
+        // if(minutes_till_open < 0) minutes_till_open = 0;
+        // if(minutes_till_close < 0) minutes_till_close = 0;
+
       }
 
-      //last loop
-      for (int i=0; i<rules_count; i++)
-      {
-        if(schedule[i].dow != 255 || schedule[i].year != 255) continue;
-        //if we still made it here, the its just a open / close date entry
-        return resolveDayStateOfSchedule(dt, schedule[i]);
-      }
-
-      minutes_till_open = 0;
-      minutes_till_close = 0;
-      //no rules matching, assume state of LOCKED
-      return DOOR_SCHEDULE_STATE_LOCKED;
-
+      //return DOOR_SCHEDULE_STATE_LOCKED;
+      return 0;
     }
