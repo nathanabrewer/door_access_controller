@@ -59,3 +59,28 @@ Default Site State: *Unarmed*
 |      |      |      | 5    |           |  LU  | LU   | LU   | LA   | U    | F    |
 |      |      |      |      |08:00-20:00|  UU  | UU   | LU   | LA   | U    | X    |
 |      |      |      |      |12:00-13:00|  LU  | LU   | LU   | LA   | U    | X    |
+
+
+
+## in the works
+
+thoughts on schedule entries
+- incourage the use of (* * * * 00 00 23 59) default type rules for global env state
+- use * instead of -1 or 255 to emulate wildcard/crontab syntax
+- span of day contributes to metric weight
+- year, month, day, dow, each contribute to metric weight
+- replace RULE value with int8_t metric value, allowing user to manually apply additional metric weight
+
++SCH 2016 05 * * 01 00 05 00 LU LU LU LU O 10
++SCH * * * * 00 00 23 59 LA LA LA LA A 100
+
+## User entries
+| UID | keycode | cardcode | keycode_req  | cardcode_req  |      | Door1 | Door2 | Door3 | Door4 | Site |
+|-----|---------|----------|--------------|---------------|------|-------|-------|-------|-------|------|
+| 10  | 6321055 |  16444   |      N       |     Y         |      |       |       |       |       |      |
+| 11  | 6322055 |  17322   |      Y       |     Y         |  LU  | G     | G     | A     | S     | S    |
+
+### Door Level Access
+- G - Guest
+- S - Staff
+- A - Admin
