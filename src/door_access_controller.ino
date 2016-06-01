@@ -3,9 +3,11 @@
 #include <Streaming.h>
 #include <Wire.h>  // must be incuded here so that Arduino library object file references work
 #include <RtcDateTime.h>
-// #include <RtcDS1307.h>
+//#include <RtcDS1307.h>
+
 #include <RtcDS3231.h>
-#include <RtcTemperature.h>
+//#include <RtcTemperature.h>
+
 #include <RtcUtility.h>
 
 #include <door.h>
@@ -21,12 +23,16 @@ static uint8_t *msg_ptr;
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
 RtcDS3231 Rtc;
+//RtcDS1307 Rtc;
 
 int loopCount=0;
 int rules_count = 0;
 
 DoorSensor door1;
 DoorSensor door2;
+DoorSensor door3;
+DoorSensor door4;
+
 Scheduler schedule1;
 
 Keypad keypad;
@@ -41,8 +47,10 @@ void setup()
 
   RTCSetup();
   //keypad =  Keypad();
-  door1.setPin(A0);
-  door2.setPin(A1);
+  door1.setPin(A0, 4);
+  door2.setPin(A1, 5);
+  door3.setPin(A2, 6);
+  door4.setPin(A3, 7);
 
   schedule1.loadFromMemory(1);
 
@@ -88,8 +96,15 @@ void loop()
         Serial.println("RTC lost confidence in the DateTime!");
     }
     loopCount=0;
-    schedule1.poll();
+    RtcDateTime now = Rtc.GetDateTime();
+
+    schedule1.poll(now);
+
     door1.poll();
+    door2.poll();
+    door3.poll();
+    door4.poll();
+
     keypad.poll();
   }
 }
@@ -97,14 +112,14 @@ void loop()
 
 
 void command_status(){
-  RtcTemperature temp = Rtc.GetTemperature();
+  //RtcTemperature temp = Rtc.GetTemperature();
   RtcDateTime now = Rtc.GetDateTime();
   schedule1.status();
 
 
-  Serial.print(F("Tempature of controller and RTC is currently "));
-  Serial.print(temp.AsFloat());
-  Serial.println("C ");
+  //Serial.print(F("Tempature of controller and RTC is currently "));
+  //Serial.print(temp.AsFloat());
+  //Serial.println("C ");
   Serial.print(F("Current Time: "));
   printDateTime(now);
   Serial.println(" ");
@@ -142,8 +157,9 @@ void RTCSetup(){
   }
   // never assume the Rtc was last configured by you, so
   // just clear them to your needed state
-  Rtc.Enable32kHzPin(false);
-  Rtc.SetSquareWavePin(DS3231SquareWavePin_ModeNone);
+
+  //Rtc.Enable32kHzPin(false);
+  //Rtc.SetSquareWavePin(DS3231SquareWavePin_ModeNone);
 }
 
 void printDateTime(const RtcDateTime& dt)
@@ -216,6 +232,22 @@ void cmd_parse(char *cmd)
     return command_status();
 
   if (memcmp(argv[0], "set", 3) == 0){
+    if (memcmp(argv[1], "lock", 4) == 0){
+      int8_t d = atol(argv[2]);
+      if(d == 1) door1.lock();
+      if(d == 2) door2.lock();
+      if(d == 3) door3.lock();
+      if(d == 4) door4.lock();
+      return;
+    }
+    if (memcmp(argv[1], "unlock", 6) == 0){
+      int8_t d = atol(argv[2]);
+      if(d == 1) door1.unlock();
+      if(d == 2) door2.unlock();
+      if(d == 3) door3.unlock();
+      if(d == 4) door4.unlock();
+      return;
+    }
     if (memcmp(argv[1], "time", 3) == 0){
           int32_t t = atol(argv[2]);
 

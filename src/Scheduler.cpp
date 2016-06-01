@@ -2,7 +2,7 @@
 #include <Streaming.h>
 
 #include "Scheduler.h"
-#include <RtcDS3231.h>
+#include <RtcDS1307.h>
 #include "EEPROM.h"
 
 #define MATCH_ANY 255
@@ -43,14 +43,17 @@ const char* dayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"
 
 void Scheduler::loadFromMemory(uint8_t memConfigStart){
   rules_count = EEPROM.read(memConfigStart);
-
+  if(rules_count > 20){
+    Serial.println("Invalid Rules Count");
+    rules_count = 0;
+  }
   for (unsigned int t=0; t<sizeof(schedule); t++)
   *((char*)&schedule + t) = EEPROM.read(memConfigStart + 1 + t);
 }
 
-void Scheduler::poll( )
+void Scheduler::poll( RtcDateTime dt )
 {
-  int state = getState();
+  int state = getState(dt);
   if(state == doorScheduleState) return;
   if(state == DOOR_SCHEDULE_STATE_LOCKED){
     Serial.println("LOCKING DOOR");
@@ -265,7 +268,7 @@ void Scheduler::status(){
   }
 }
 
-uint8_t Scheduler::getState(){
+uint8_t Scheduler::getState(RtcDateTime dt){
 
   if(rules_count < 1){
     minutes_till_open = 0;
@@ -273,7 +276,7 @@ uint8_t Scheduler::getState(){
     return DOOR_SCHEDULE_STATE_LOCKED;
   }
 
-    RtcDateTime dt = _RTC.GetDateTime();
+    //RtcDateTime dt = _RTC.GetDateTime();
     for (uint8_t i=0; i<rules_count; i++)
     {
       schedule[i].metric = 0;

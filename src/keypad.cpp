@@ -12,25 +12,35 @@ Keypad::Keypad(){
   wg_msg_ptr = wgmsg;
 }
 
-// int DoorSensor::getValue(){
-//   return _SENSOR_READING;
-// }
-// int DoorSensor::getState(){
-//   return _SENSOR_STATE;
+
+// unsigned long keypadToLong(char *cmd)
+// {
+//   //YUCK, this is UGLY! ...but it works for now
+//   int8_t i, v, l;
+//   unsigned long longv;
+//   l = strlen(cmd);
+//   longv = 0;
+//   for(i=0; i < l ;i++){
+//     v = cmd[i];
+//     Serial.println( (pow(10,( l-i-1) )*(int)v) );
+//     longv += pow(10,( l-i-1) )*v;
+//   }
+// Serial.println(longv);
+//   return longv;
 // }
 
-//YUCK, but it works
 unsigned long keypadToLong(char *cmd)
 {
+  //YUCK, this is UGLY! ...but it works for now
+  //having issues with null terminated \0 ...it is truncating a keypad code at zero
   int8_t i, v, l;
   unsigned long longv;
   l = strlen(cmd);
-
   char temp[10];
   char t[2];
   for(i=0; i< l;i++){
     v = cmd[i];
-    if(v > 47) v = v-48;
+    if(v > 47) v = v-48; //bring back to actual value
     cmd[i] = v;
     sprintf(t,"%d",v);
     temp[i] = t[0];
@@ -44,7 +54,15 @@ unsigned long keypadToLong(char *cmd)
 
 void showCode(unsigned long code)
 {
-  Serial.print("unsigned long value: ");
+
+  if(code == 6321032){
+    Serial.println(F("Welcome User XYZ"));
+  }
+  if(code == 8818){
+    Serial.println(F("Hey Nate!"));
+  }
+
+  Serial.print(F("RX KEY/CARD >> "));
   char tmp[12];
   ultoa(code, tmp, 10);
   Serial.println(code);

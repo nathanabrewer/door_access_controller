@@ -1,11 +1,18 @@
 #include <Arduino.h>
 #include "door.h"
 
-void DoorSensor::setPin( uint8_t pin ){
-  sensor_pin = pin;
+void DoorSensor::setPin( uint8_t sp, uint8_t rp ){
+  sensor_pin = sp;
+  relay_pin = rp;
+
   sensor_state = DOOR_SENSOR_STATE_UNKNOWN;
   sensor_last_state = DOOR_SENSOR_STATE_UNKNOWN;
-  pinMode(sensor_pin, INPUT_PULLUP);
+  //pinMode(sensor_pin, INPUT_PULLUP);
+  pinMode(sensor_pin, INPUT);
+
+  pinMode(relay_pin, OUTPUT);
+
+  digitalWrite(relay_pin, HIGH);
 }
 
 int DoorSensor::getValue(){
@@ -14,6 +21,19 @@ int DoorSensor::getValue(){
 int DoorSensor::getState(){
   return sensor_state;
 }
+
+void DoorSensor::lock( )
+{
+  relay_lock_state = true;
+  digitalWrite(relay_pin, LOW);
+}
+
+void DoorSensor::unlock( )
+{
+  relay_lock_state = false;
+  digitalWrite(relay_pin, HIGH);
+}
+
 
 void DoorSensor::poll( )
 {
@@ -28,7 +48,9 @@ void DoorSensor::poll( )
   // Compare to previous value
   if ( sensor_state != sensor_last_state )
   {
-    Serial.print("Sensor changed from ");
+    Serial.print("INPUT <");
+    Serial.print(sensor_pin);
+    Serial.print("> ");
     Serial.print(sensor_last_state);
     Serial.print(" to ");
     Serial.println(sensor_state);

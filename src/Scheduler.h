@@ -44,9 +44,9 @@ private:
     uint8_t resolveRelayState(char key);
     uint8_t resolveSensorState(char key);
 public:
-    void poll();
+    void poll(RtcDateTime dt);
     void sort();
-    uint8_t getState();
+    uint8_t getState(RtcDateTime dt);
     void add(char **args);
     void list();
     void save(uint8_t memConfigStart);
