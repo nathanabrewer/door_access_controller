@@ -12,7 +12,7 @@
 
 #include <door.h>
 #include "keypad.h"
-#include "scheduler.h"
+#include "Scheduler.h"
 
 #include <avr/pgmspace.h>
 
@@ -46,10 +46,11 @@ void setup()
 
 
   RTCSetup();
+
   //keypad =  Keypad();
-  door1.setPin(A0, 4);
-  door2.setPin(A1, 5);
-  door3.setPin(A2, 6);
+  door1.setPin(A0, 2);
+  door2.setPin(A1, 3);
+  door3.setPin(A2, 9);
   door4.setPin(A3, 7);
 
   schedule1.loadFromMemory(1);
@@ -93,7 +94,7 @@ void loop()
   loopCount++;
   if(loopCount == 25500){
     if (!Rtc.IsDateTimeValid()){
-        Serial.println("RTC lost confidence in the DateTime!");
+        //Serial.println("RTC lost confidence in the DateTime!");
     }
     loopCount=0;
     RtcDateTime now = Rtc.GetDateTime();
@@ -216,6 +217,8 @@ void cmd_parse(char *cmd)
   do { argv[++i] = strtok(NULL, " ");
   } while ((i < 30) && (argv[i] != NULL));
 
+
+
   if (memcmp(argv[0], "save", 4) == 0)
     return command_save();
 
@@ -256,6 +259,11 @@ void cmd_parse(char *cmd)
           Serial.println(t);
           Rtc.SetDateTime(settime);
           return;
+    }
+    if (memcmp(argv[1], "compiled", 8) == 0){
+      RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
+      Rtc.SetDateTime(compiled);
+      return;
     }
   }
 

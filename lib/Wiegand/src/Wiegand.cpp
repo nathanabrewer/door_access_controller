@@ -1,4 +1,6 @@
 #include "Wiegand.h"
+#include <avr/io.h>
+#include <avr/interrupt.h>
 
 volatile unsigned long WIEGAND::_cardTempHigh=0;
 volatile unsigned long WIEGAND::_cardTemp=0;
@@ -7,12 +9,15 @@ unsigned long WIEGAND::_code=0;
 volatile int WIEGAND::_bitCount=0;
 int WIEGAND::_wiegandType=0;
 
+volatile uint8_t portbhistory = 0xFF;
+
 WIEGAND::WIEGAND()
 {
 }
 
 unsigned long WIEGAND::getCode()
 {
+
 	return _code;
 }
 
@@ -32,12 +37,50 @@ bool WIEGAND::available()
 
 void WIEGAND::begin()
 {
-#ifdef digitalPinToInterrupt
-  // newer versions of Arduino provide pin to interrupt mapping
-  begin(2,digitalPinToInterrupt(2),3,digitalPinToInterrupt(3));
-#else
-  begin(2,0,3,1);
-#endif
+
+
+	DDRB &= ~((1 << DDB5) | (1 << DDB6)); // Clear the PB5, PB6 pin
+
+	PCICR |= (1<<PCIE0); //enable PCINT0
+	PCICR |= (1<<PCIE2); //enable PCINT2
+
+	PCMSK2 |= (1<<PCINT21);
+	PCMSK0 |= (1<<PCINT4);
+
+
+	EICRA |= (1<<ISC01);
+
+	sei();                     // turn on interrupts
+
+}
+
+ISR (PCINT0_vect)
+{
+	WIEGAND::ReadD0();
+}
+
+ISR (PCINT2_vect)
+{
+	WIEGAND::ReadD1();
+return;
+	  uint8_t changedbits;
+    changedbits = PIND ^ portbhistory;
+
+    portbhistory = PIND;
+    if(changedbits & (1 << PIND0))
+    {
+			Serial.println("0");
+
+			WIEGAND::ReadD0();
+    }
+    if(changedbits & (1 << PIND1))
+    {
+			Serial.println("1");
+
+			WIEGAND::ReadD1();
+    }
+
+
 }
 
 void WIEGAND::begin(int pinD0, int pinIntD0, int pinD1, int pinIntD1)

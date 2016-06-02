@@ -16,17 +16,18 @@ public:
 	bool available();
 	unsigned long getCode();
 	int getWiegandType();
-	
-private:
 	static void ReadD0();
-	static void ReadD1();
+	static void ReadD1();	
+
+private:
+
 	static bool DoWiegandConversion ();
 	static unsigned long GetCardId (volatile unsigned long *codehigh, volatile unsigned long *codelow, char bitlength);
-	
+
 	static volatile unsigned long 	_cardTempHigh;
 	static volatile unsigned long 	_cardTemp;
 	static volatile unsigned long 	_lastWiegand;
-	static volatile int				_bitCount;	
+	static volatile int				_bitCount;
 	static int				_wiegandType;
 	static unsigned long	_code;
 };

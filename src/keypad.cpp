@@ -72,6 +72,8 @@ void Keypad::poll( )
 {
   if(wg.available())
 	{
+    Serial.print(".");
+
     if(wg.getWiegandType() == 26){
 
       showCode(wg.getCode());
@@ -101,7 +103,7 @@ void Keypad::poll( )
 
     default:
         // normal character entered. add it to the buffer
-        //Serial.print(c);
+        Serial.print(c);
         *wg_msg_ptr++ = c;
         break;
     }
