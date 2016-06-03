@@ -8,7 +8,7 @@ static uint8_t wgmsg[10];
 static uint8_t *wg_msg_ptr;
 
 Keypad::Keypad(){
-  wg.begin();
+  //wg.begin();
   wg_msg_ptr = wgmsg;
 }
 

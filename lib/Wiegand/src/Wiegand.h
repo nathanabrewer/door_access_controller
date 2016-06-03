@@ -12,12 +12,12 @@ class WIEGAND {
 public:
 	WIEGAND();
 	void begin();
-	void begin(int pinD0, int pinIntD0, int pinD1, int pinIntD1);
+	void begin(int pinD1,int pinD0);
 	bool available();
 	unsigned long getCode();
 	int getWiegandType();
 	static void ReadD0();
-	static void ReadD1();	
+	static void ReadD1();
 
 private:
 

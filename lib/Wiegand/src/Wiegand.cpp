@@ -1,6 +1,5 @@
 #include "Wiegand.h"
-#include <avr/io.h>
-#include <avr/interrupt.h>
+#include <Arduino.h>
 
 volatile unsigned long WIEGAND::_cardTempHigh=0;
 volatile unsigned long WIEGAND::_cardTemp=0;
@@ -9,7 +8,6 @@ unsigned long WIEGAND::_code=0;
 volatile int WIEGAND::_bitCount=0;
 int WIEGAND::_wiegandType=0;
 
-volatile uint8_t portbhistory = 0xFF;
 
 WIEGAND::WIEGAND()
 {
@@ -17,7 +15,6 @@ WIEGAND::WIEGAND()
 
 unsigned long WIEGAND::getCode()
 {
-
 	return _code;
 }
 
@@ -37,53 +34,10 @@ bool WIEGAND::available()
 
 void WIEGAND::begin()
 {
-
-
-	DDRB &= ~((1 << DDB5) | (1 << DDB6)); // Clear the PB5, PB6 pin
-
-	PCICR |= (1<<PCIE0); //enable PCINT0
-	PCICR |= (1<<PCIE2); //enable PCINT2
-
-	PCMSK2 |= (1<<PCINT21);
-	PCMSK0 |= (1<<PCINT4);
-
-
-	EICRA |= (1<<ISC01);
-
-	sei();                     // turn on interrupts
-
+  begin(4,5);
 }
 
-ISR (PCINT0_vect)
-{
-	WIEGAND::ReadD0();
-}
-
-ISR (PCINT2_vect)
-{
-	WIEGAND::ReadD1();
-return;
-	  uint8_t changedbits;
-    changedbits = PIND ^ portbhistory;
-
-    portbhistory = PIND;
-    if(changedbits & (1 << PIND0))
-    {
-			Serial.println("0");
-
-			WIEGAND::ReadD0();
-    }
-    if(changedbits & (1 << PIND1))
-    {
-			Serial.println("1");
-
-			WIEGAND::ReadD1();
-    }
-
-
-}
-
-void WIEGAND::begin(int pinD0, int pinIntD0, int pinD1, int pinIntD1)
+void WIEGAND::begin(int pinD1, int pinD0)
 {
 	_lastWiegand = 0;
 	_cardTempHigh = 0;
@@ -91,10 +45,15 @@ void WIEGAND::begin(int pinD0, int pinIntD0, int pinD1, int pinIntD1)
 	_code = 0;
 	_wiegandType = 0;
 	_bitCount = 0;
-	pinMode(pinD0, INPUT);					// Set D0 pin as input
-	pinMode(pinD1, INPUT);					// Set D1 pin as input
-	attachInterrupt(pinIntD0, ReadD0, FALLING);	// Hardware interrupt - high to low pulse
-	attachInterrupt(pinIntD1, ReadD1, FALLING);	// Hardware interrupt - high to low pulse
+	// pinMode(pinD0, INPUT);					// Set D0 pin as input
+	// pinMode(pinD1, INPUT);					// Set D1 pin as input
+	// attachInterrupt(pinIntD0, ReadD0, FALLING);	// Hardware interrupt - high to low pulse
+	// attachInterrupt(pinIntD1, ReadD1, FALLING);	// Hardware interrupt - high to low pulse
+
+	// Attach pin change interrupt service routines from the Wiegand RFID readers
+
+Serial.println("Attaching pin interrupts");
+
 }
 
 void WIEGAND::ReadD0 ()
@@ -170,6 +129,9 @@ bool WIEGAND::DoWiegandConversion ()
 	{
 		if ((_bitCount==26) || (_bitCount==34) || (_bitCount==8) || (_bitCount==4)) 	// bitCount for keypress=4 or 8, Wiegand 26=26, Wiegand 34=34
 		{
+
+			Serial.println(_bitCount, HEX);
+
 			_cardTemp >>= 1;			// shift right 1 bit to get back the real value - interrupt done 1 left shift in advance
 			if (_bitCount>32)			// bit count more than 32 bits, shift high bits right to make adjustment
 				_cardTempHigh >>= 1;

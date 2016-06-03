@@ -14,6 +14,7 @@
 #include "keypad.h"
 #include "Scheduler.h"
 
+#include "pins_arduino.h"
 #include <avr/pgmspace.h>
 
 
@@ -38,27 +39,12 @@ Scheduler schedule1;
 Keypad keypad;
 
 
-void setup()
-{
-  msg_ptr = msg;
-
-  Serial.begin(57600);
-
-
-  RTCSetup();
-
-  //keypad =  Keypad();
-  door1.setPin(A0, 2);
-  door2.setPin(A1, 3);
-  door3.setPin(A2, 9);
-  door4.setPin(A3, 7);
-
-  schedule1.loadFromMemory(1);
+const int WiegandData1 = 4;
+const int WiegandData0 = 5;
+volatile long readerBits = 0;
+volatile int readerBitCount = 0;
 
 
-  cmd_display();
-
-}
 void command_help()
 {
     Serial.println(F("help\tthis menu"));
@@ -91,6 +77,9 @@ void loop()
   {
       cmd_handler();
   }
+
+  handle_keypad_buffer();
+
   loopCount++;
   if(loopCount == 25500){
     if (!Rtc.IsDateTimeValid()){
@@ -328,4 +317,208 @@ void cmd_handler()
         *msg_ptr++ = c;
         break;
     }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+//***************** vv Code for managing interruptions vv ********************
+  /*
+    All terminals can generate interrupts on ATmega168 transition.
+    The bit corresponding to the terminal to be the source of the event should
+    be enabled in the registry correspond PCInt and a service routine (ISR).
+    Because the registration PCInt operates port, not terminal, the routine ISR
+    must use some algorithm to implement an interrupt service routine
+    by terminal
+    Correspondenicas terminal and to interrupt masking registers:
+    D0-D7 => 16-23 = PCIR2 PCInt = PD = PCIE2 = pcmsk2
+    D8-D13 => 0-5 = PCIR0 PCInt = PB = PCIE0 = pcmsk0
+    A0-A5 (D14-D19) => 8-13 = PCIR1 PCInt = PC = PCIE1 = pcmsk1
+   */
+
+  volatile uint8_t *port_to_pcmask[] = {
+    &PCMSK0,
+    &PCMSK1,
+    &PCMSK2
+  };
+
+  typedef void (*voidFuncPtr)(void);
+
+  volatile static voidFuncPtr PCintFunc[24] = {
+    NULL };
+
+  volatile static uint8_t PCintLast[3];
+
+  void PCattachInterrupt(uint8_t pin, void (*userFunc)(void), int mode) {
+
+      uint8_t bit = digitalPinToBitMask(pin);
+      uint8_t port = digitalPinToPort(pin);
+      uint8_t slot;
+      volatile uint8_t *pcmask;
+
+      if (mode != CHANGE) {
+      return;
+      }
+      // Modify the registry ("Interrupt Control Register") ICR
+      // As requested terminal, validating that is between 0 and 13
+
+
+      if (port == NOT_A_PORT) {
+      return;
+      }
+      else {
+      port -= 2;
+      pcmask = port_to_pcmask[port];
+      }
+
+      slot = port * 8 + (pin % 8);
+      PCintFunc[slot] = userFunc;
+
+      // Set the interrupt mask
+      *pcmask |= bit;
+
+      // Interrupt Enable
+      PCICR |= 0x01 << port;
+  }
+
+  static void PCint(uint8_t port) {
+
+      uint8_t bit;
+      uint8_t curr;
+      uint8_t mask;
+      uint8_t pin;
+
+      // get the pin states for the indicated port.
+      curr = *portInputRegister(port+2);
+      mask = curr ^ PCintLast[port];
+      PCintLast[port] = curr;
+      // mask is pins that have changed. screen out non pcint pins.
+      if ((mask &= *port_to_pcmask[port]) == 0) {
+      return;
+      }
+      // mask is pcint pins that have changed.
+      for (uint8_t i=0; i < 8; i++) {
+      bit = 0x01 << i;
+      if (bit & mask) {
+        pin = port * 8 + i;
+        if (PCintFunc[pin] != NULL) {
+        PCintFunc[pin]();
+        }
+      }
+      }
+  }
+
+  SIGNAL(PCINT0_vect) {
+    PCint(0);
+  }
+  SIGNAL(PCINT1_vect) {
+    PCint(1);
+  }
+  SIGNAL(PCINT2_vect) {
+    PCint(2);
+  }
+
+  //***************** ^^ Code for managing interruptions ^^ ********************
+  //*********** vv Code for counting and storing bits vv **********
+  void readerOne(void) {
+    if(digitalRead(4) == LOW){
+     readerBitCount++;
+     readerBits = readerBits << 1;  //Move the bits ...
+     readerBits |= 1;  // ... add a bit to '1 'in the least significant bit
+    }
+
+  }
+
+  void readerZero(void) {
+    if(digitalRead(5) == LOW){
+     readerBitCount++;
+     readerBits = readerBits << 1;  //Move the bits ...
+
+    }
+
+  }
+
+
+  //*********** ^^ Code for counting and storing bits ^^ **********
+
+
+
+  void prepWiegand(){
+      for(int i = WiegandData1; i<=WiegandData0; i++){
+         pinMode(i, OUTPUT);
+         digitalWrite(i, HIGH); // enable internal pull up causing a one
+         digitalWrite(i, LOW);  // disable internal pull up causing zero and thus an interrupt
+         pinMode(i, INPUT);
+         digitalWrite(i, HIGH); // enable internal pull up
+      }
+      delay(10);
+  }
+
+  unsigned long cardID;
+  void handle_keypad_buffer(){
+
+        if(readerBitCount == 26){
+          cardID = (readerBits & 0x1FFFFFE) >>1;
+          Serial.println(cardID);
+          readerBits = 0;
+          readerBitCount = 0;
+          prepWiegand();
+        }
+
+        if(readerBitCount == 4){
+          int data = (int) readerBits & 0x0000000F;
+          Serial.println(data, DEC);
+          readerBits = 0;
+          readerBitCount = 0;
+          prepWiegand();
+        }
+
+        if(readerBitCount >= 26 ){
+          readerBits = 0;
+          readerBitCount = 0;
+          prepWiegand();
+        }
+}
+
+
+
+
+void setup()
+{
+  msg_ptr = msg;
+
+  Serial.begin(57600);
+
+
+  RTCSetup();
+
+  //keypad =  Keypad();
+  door1.setPin(A0, 2);
+  door2.setPin(A1, 3);
+  door3.setPin(A2, 9);
+  door4.setPin(A3, 7);
+
+  schedule1.loadFromMemory(1);
+
+
+  cmd_display();
+
+  //KEYPAD
+  PCattachInterrupt(WiegandData1, readerOne, CHANGE);
+  PCattachInterrupt(WiegandData0, readerZero, CHANGE);
+  delay(10);
+  prepWiegand();
+  // put the reader input variables to zero
+  readerBits=0;
+  readerBitCount = 0;
+
 }
