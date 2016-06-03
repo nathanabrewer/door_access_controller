@@ -7,8 +7,8 @@ void DoorSensor::setPin( uint8_t sp, uint8_t rp ){
 
   sensor_state = DOOR_SENSOR_STATE_UNKNOWN;
   sensor_last_state = DOOR_SENSOR_STATE_UNKNOWN;
-  //pinMode(sensor_pin, INPUT_PULLUP);
-  pinMode(sensor_pin, INPUT);
+  pinMode(sensor_pin, INPUT_PULLUP);
+  //pinMode(sensor_pin, INPUT);
 
   pinMode(relay_pin, OUTPUT);
 

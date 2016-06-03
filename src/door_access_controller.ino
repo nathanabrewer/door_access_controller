@@ -7,19 +7,21 @@
 
 #include <RtcDS3231.h>
 //#include <RtcTemperature.h>
-
 #include <RtcUtility.h>
-
 #include <door.h>
-#include "keypad.h"
 #include "Scheduler.h"
 
 #include "pins_arduino.h"
 #include <avr/pgmspace.h>
 
+#define KEYPAD_BUZZER 11
+#define KEYPAD_LED 12
 
 static uint8_t msg[60]; // command line message buffer and pointer
 static uint8_t *msg_ptr;
+
+static uint8_t wgmsg[10];
+static uint8_t *wg_msg_ptr;
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
@@ -36,7 +38,7 @@ DoorSensor door4;
 
 Scheduler schedule1;
 
-Keypad keypad;
+//Keypad keypad;
 
 
 const int WiegandData1 = 4;
@@ -73,12 +75,12 @@ void command_list(){
 
 void loop()
 {
-  while (Serial.available())
+  handle_keypad_buffer();
+
+  if (Serial.available())
   {
       cmd_handler();
   }
-
-  handle_keypad_buffer();
 
   loopCount++;
   if(loopCount == 25500){
@@ -95,7 +97,7 @@ void loop()
     door3.poll();
     door4.poll();
 
-    keypad.poll();
+    //keypad.poll();
   }
 }
 
@@ -106,10 +108,10 @@ void command_status(){
   RtcDateTime now = Rtc.GetDateTime();
   schedule1.status();
 
-
   //Serial.print(F("Tempature of controller and RTC is currently "));
   //Serial.print(temp.AsFloat());
   //Serial.println("C ");
+
   Serial.print(F("Current Time: "));
   printDateTime(now);
   Serial.println(" ");
@@ -121,6 +123,10 @@ void command_status(){
 
 
 void RTCSetup(){
+
+
+
+
   //--------RTC SETUP ------------
   Rtc.Begin();
   RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
@@ -464,43 +470,104 @@ void cmd_handler()
   }
 
   unsigned long cardID;
+  unsigned long _lastWiegand = 0;
+
+
   void handle_keypad_buffer(){
+    unsigned long sysTick = millis();
+
+  	if ((sysTick - _lastWiegand) > 300){
+      if ((readerBitCount==26) || (readerBitCount==4)) {
 
         if(readerBitCount == 26){
           cardID = (readerBits & 0x1FFFFFE) >>1;
-          Serial.println(cardID);
+          showCode(cardID);
           readerBits = 0;
           readerBitCount = 0;
-          prepWiegand();
+
+          *wg_msg_ptr = '\0';
+          wg_msg_ptr = wgmsg;
+
+          //prepWiegand();
+          return;
         }
 
         if(readerBitCount == 4){
           int data = (int) readerBits & 0x0000000F;
-          Serial.println(data, DEC);
+
+          switch (data)
+          {
+            case 11:
+                *wg_msg_ptr = '\0';
+                showCode(keypadToLong((char *)wgmsg));
+                wg_msg_ptr = wgmsg;
+                break;
+
+            case 10:
+                // escape... clear buffer
+                *wg_msg_ptr = '\0';
+                wg_msg_ptr = wgmsg;
+            break;
+
+            default:
+                // normal character entered. add it to the buffer
+                *wg_msg_ptr++ = data;
+                break;
+          }
+
           readerBits = 0;
           readerBitCount = 0;
-          prepWiegand();
+          //prepWiegand();
+          return;
         }
 
-        if(readerBitCount >= 26 ){
-          readerBits = 0;
-          readerBitCount = 0;
-          prepWiegand();
-        }
+      }else{
+
+        // if(readerBitCount > 2){
+        //   Serial.print("Size: ");
+        //   Serial.println(readerBitCount, DEC);
+        //   unsigned long data = (readerBits & 0x1FFFFFE) >>1;
+        //   Serial.print(data, DEC);
+        //   Serial.print("-");
+        //   Serial.println(data, BIN);
+        // }
+        readerBits = 0;
+        readerBitCount = 0;
+        //prepWiegand();
+      }
+        _lastWiegand=sysTick;
+  }
+
 }
 
 
 
+void welcomeKeypad(){
+  pinMode(KEYPAD_BUZZER, OUTPUT);
+  pinMode(KEYPAD_LED, OUTPUT);
+  int8_t i;
+  for(i=1; i<5; i++){
+    digitalWrite(KEYPAD_LED, LOW);
+    digitalWrite(KEYPAD_BUZZER, LOW);
+    delay(100);
+    digitalWrite(KEYPAD_LED, HIGH);
+    digitalWrite(KEYPAD_BUZZER, HIGH);
+    delay(200);
+  }
+  digitalWrite(KEYPAD_LED, HIGH);
+  digitalWrite(KEYPAD_BUZZER, HIGH);
+}
 
 void setup()
 {
-  msg_ptr = msg;
+  welcomeKeypad();
 
   Serial.begin(57600);
 
+  msg_ptr = msg;
+  wg_msg_ptr = wgmsg;
 
   RTCSetup();
-
   //keypad =  Keypad();
   door1.setPin(A0, 2);
   door2.setPin(A1, 3);
@@ -508,17 +575,56 @@ void setup()
   door4.setPin(A3, 7);
 
   schedule1.loadFromMemory(1);
-
-
   cmd_display();
 
   //KEYPAD
   PCattachInterrupt(WiegandData1, readerOne, CHANGE);
   PCattachInterrupt(WiegandData0, readerZero, CHANGE);
   delay(10);
-  prepWiegand();
+
   // put the reader input variables to zero
   readerBits=0;
   readerBitCount = 0;
+  prepWiegand();
 
+}
+
+
+unsigned long keypadToLong(char *cmd)
+{
+  //YUCK, this is UGLY! ...but it works for now
+  //having issues with null terminated \0 ...it is truncating a keypad code at zero
+  int8_t i, v, l;
+  unsigned long longv;
+  l = strlen(cmd);
+  char temp[10];
+  char t[2];
+  for(i=0; i< l;i++){
+    v = cmd[i];
+    if(v > 47) v = v-48; //bring back to actual value
+    cmd[i] = v;
+    sprintf(t,"%d",v);
+    temp[i] = t[0];
+    //Serial.println(v);
+  }
+  i++;
+  temp[i]='\0';
+  longv = atol (temp);
+  return longv;
+}
+
+void showCode(unsigned long code)
+{
+
+  if(code == 6321032){
+    Serial.println(F("Welcome User XYZ"));
+  }
+  if(code == 8818){
+    Serial.println(F("Hey Nate!"));
+  }
+
+  Serial.print(F("RX KEY/CARD >> "));
+  char tmp[12];
+  ultoa(code, tmp, 10);
+  Serial.println(code);
 }
