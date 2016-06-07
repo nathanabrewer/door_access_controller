@@ -18,20 +18,20 @@ const int DEVICE_STATUS_BAD_AUTH = 4;
 
 
 class DoorSensor{
-private:
+
+public: 
+    void setPin(uint8_t sp, uint8_t rp);
+    void poll();
+    void lock();
+    int getRelayState();
+    void unlock();
+    int getState();
+    int getValue();
+
     uint8_t sensor_pin;
     uint8_t relay_pin;
     int sensor_state;
     int sensor_last_state;
     int sensor_reading;
     bool relay_lock_state;
-
-public:
-    void setPin(uint8_t sensor_pin, uint8_t relay_pin);
-    void poll();
-    void lock();
-    void unlock();
-    int getState();
-    int getValue();
-
 };

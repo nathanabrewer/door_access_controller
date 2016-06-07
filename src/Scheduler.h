@@ -1,9 +1,29 @@
 #include <RtcDS3231.h>
-
-#define DOOR_SCHEDULE_STATE_UNLOCKED 0
-#define DOOR_SCHEDULE_STATE_LOCKED 1
+#include <door.h>
 
 #define MAX_SCHEDULE_SIZE 10
+#define NUM_OF_DOORS 4
+
+class ScheduleDoor {
+public:
+  uint8_t relay;
+  uint8_t sensor;
+};
+
+class SiteState{
+  public:
+    uint8_t matching_rules;
+    ScheduleDoor doors[NUM_OF_DOORS];
+    uint8_t env_flag;
+};
+
+class ScheduleMetricType{
+  public:
+    uint8_t metric;
+    bool match;
+    int minutes_since;
+    int minutes_until;
+};
 
 
 
@@ -17,18 +37,9 @@ class ScheduleType {
     uint8_t open_min;
     uint8_t close_hour;
     uint8_t close_min;
-    uint8_t door1_relay;
-    uint8_t door1_sensor;
-    uint8_t door2_relay;
-    uint8_t door2_sensor;
-    uint8_t door3_relay;
-    uint8_t door3_sensor;
-    uint8_t door4_relay;
-    uint8_t door4_sensor;
+    ScheduleDoor doors[NUM_OF_DOORS];
     uint8_t env_flag;
     uint8_t rule_flag;
-    uint8_t metric;
-    bool match;
 };
 
 
@@ -37,16 +48,22 @@ private:
     RtcDS3231 _RTC;
     uint8_t doorScheduleState;
     uint8_t rules_count;
-    uint8_t resolveDayStateOfSchedule(RtcDateTime dt, ScheduleType rule);
+    DoorSensor doors[NUM_OF_DOORS];
+    uint8_t door_count;
     ScheduleType schedule[MAX_SCHEDULE_SIZE];
+    ScheduleMetricType schedule_metric[MAX_SCHEDULE_SIZE];
+    SiteState resolved_state;
+    SiteState current_state;
     int minutes_till_open;
     int minutes_till_close;
     uint8_t resolveRelayState(char key);
     uint8_t resolveSensorState(char key);
 public:
     void poll(RtcDateTime dt);
+    void init();
+    void setDoorState(uint8_t door, uint8_t state );
     void sort();
-    uint8_t getState(RtcDateTime dt);
+    void evalState(RtcDateTime dt);
     void add(char **args);
     void list();
     void save(uint8_t memConfigStart);

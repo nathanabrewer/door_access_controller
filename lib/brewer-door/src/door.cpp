@@ -21,23 +21,22 @@ int DoorSensor::getValue(){
 int DoorSensor::getState(){
   return sensor_state;
 }
-
+int DoorSensor::getRelayState(){
+  return relay_lock_state;
+}
 void DoorSensor::lock( )
 {
   relay_lock_state = true;
-  digitalWrite(relay_pin, LOW);
+  digitalWrite(relay_pin, HIGH);
 }
-
 void DoorSensor::unlock( )
 {
   relay_lock_state = false;
-  digitalWrite(relay_pin, HIGH);
+  digitalWrite(relay_pin, LOW);
 }
 
-
-void DoorSensor::poll( )
+void DoorSensor::poll()
 {
-
   sensor_reading = analogRead(sensor_pin);
   if ( sensor_reading >= 0 && sensor_reading <= 110 ) sensor_state = DOOR_SENSOR_STATE_SHORT;
   if ( sensor_reading >= 110 && sensor_reading <= 400 ) sensor_state = DOOR_SENSOR_STATE_NORMAL;
@@ -46,15 +45,10 @@ void DoorSensor::poll( )
   if ( sensor_reading >= 800 ) sensor_state = DOOR_SENSOR_STATE_CUT;
 
   // Compare to previous value
-  if ( sensor_state != sensor_last_state )
-  {
-    Serial.print("INPUT <");
-    Serial.print(sensor_pin);
-    Serial.print("> ");
-    Serial.print(sensor_last_state);
-    Serial.print(" to ");
-    Serial.println(sensor_state);
-    sensor_last_state = sensor_state;
-  }
+  // if ( sensor_state != sensor_last_state )
+  // {
+  //   sensor_state_change(id, sensor_last_state, sensor_state);
+  //   sensor_last_state = sensor_state;
+  // }
 
 }

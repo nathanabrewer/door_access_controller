@@ -1,42 +1,102 @@
 #include <Arduino.h>
 #include <Streaming.h>
-
 #include "Scheduler.h"
-#include <RtcDS1307.h>
 #include "EEPROM.h"
-
-#define MATCH_ANY 255
-
-#define RELAY_STATE_NONE 0
-#define RELAY_STATE_UNLOCKED 1
-#define RELAY_STATE_LOCKED 2
-#define RELAY_STATE_FORCE_LOCK 3
-#define RELAY_STATE_INHERIT 4
-const signed char relayState[] = {'X', 'U','L', 'F', 'I'};
-
-#define SENSOR_STATE_NONE 0
-#define SENSOR_STATE_UNARMED 1
-#define SENSOR_STATE_CHIME 2
-#define SENSOR_STATE_ARMED 3
-#define SENSOR_STATE_INHERIT 4
-const signed char sensorState[] = {'X','U','C','A','I'};
-
-#define ENV_STATE_NONE 0
-#define ENV_STATE_UNARMED 1
-#define ENV_STATE_ARMED 2
-#define ENV_STATE_STAY 3
-#define ENV_STATE_FORCE_ARMED 4
-#define ENV_STATE_FORCE_DISARMED 5
-#define ENV_STATE_INHERIT 6
-const signed char envState[] = {'X','U','A','S','F','O','I'};
-
-#define RULE_FLAG_NONE 0
-#define RULE_FLAG_FINAL 1
-const signed char ruleFlag[] = {'X','F'};
 
 #define DEFAULT_RELAY_STATE 2
 #define DEFAULT_SENSOR_STATE 1
 #define DEFAULT_ENV_STATE 1
+#define MATCH_ANY 255
+
+const signed char relayState[] = {'X', 'U','L', 'F', 'I'};
+enum relay_state {RELAY_STATE_NONE, RELAY_STATE_UNLOCKED, RELAY_STATE_LOCKED, RELAY_STATE_FORCE_LOCK, RELAY_STATE_INHERIT};
+
+const signed char sensorState[] = {'X','U','C','A','I'};
+enum sensor_state {SENSOR_STATE_NONE, SENSOR_STATE_UNARMED, SENSOR_STATE_CHIME, SENSOR_STATE_ARMED, SENSOR_STATE_INHERIT};
+
+const signed char envState[] = {'X','U','A','S','F','O','I'};
+enum env_state {ENV_STATE_NONE, ENV_STATE_UNARMED, ENV_STATE_ARMED, ENV_STATE_STAY, ENV_STATE_FORCE_ARMED, ENV_STATE_FORCE_DISARMED, ENV_STATE_INHERIT};
+
+const signed char ruleFlag[] = {'X','F'};
+enum rule_flag {RULE_FLAG_NONE, RULE_FLAG_FINAL};
+
+
+void Scheduler::init(){
+  doors[0].setPin(A0, 2);
+  doors[1].setPin(A1, 3);
+  doors[2].setPin(A2, 9);
+  doors[3].setPin(A3, 7);
+
+}
+
+void Scheduler::poll( RtcDateTime dt )
+{
+  uint8_t i;
+  for(i=0; i<NUM_OF_DOORS; i++){
+
+    doors[i].poll();
+
+    if( doors[i].sensor_state != doors[i].sensor_last_state){
+
+      Serial << "INPUT <" << i << "> " <<doors[i].sensor_last_state << " to " << doors[i].sensor_state << endl;
+      doors[i].sensor_last_state = doors[i].sensor_state;
+
+      if(doors[i].sensor_state == DOOR_SENSOR_STATE_SHORT){
+        Serial << "Check For RTE Event Support " << endl;
+      }
+
+    }
+
+  }
+
+  evalState(dt);
+
+  //TODO: need to have the rules sorted by metric value, but lets pretend like that has already happened
+
+  //resolved_state
+  //current_state
+
+  for (uint8_t i=0; i<rules_count; i++){
+    if(!schedule_metric[i].match) continue;
+    for (uint8_t d=0; d<NUM_OF_DOORS; d++){
+        if(schedule[i].doors[d].relay != RELAY_STATE_NONE || resolved_state.doors[d].relay != RELAY_STATE_INHERIT)
+          resolved_state.doors[d].relay = schedule[i].doors[d].relay;
+        if(schedule[i].doors[d].sensor != SENSOR_STATE_NONE || resolved_state.doors[d].sensor != SENSOR_STATE_INHERIT)
+          resolved_state.doors[d].sensor = schedule[i].doors[d].sensor;
+    }
+    if(schedule[i].env_flag != ENV_STATE_INHERIT || schedule[i].env_flag != ENV_STATE_NONE)
+      resolved_state.env_flag = schedule[i].env_flag;
+  }//resolved state complete
+
+
+  //loop through doors again, apply resolved state as current state
+  for (uint8_t d=0; d<NUM_OF_DOORS; d++){
+    //check relay state
+    if(current_state.doors[d].relay != resolved_state.doors[d].relay){
+      if(resolved_state.doors[d].relay == RELAY_STATE_LOCKED || resolved_state.doors[d].relay == RELAY_STATE_FORCE_LOCK){
+        Serial << "Locking Door " << i << endl;
+        doors[d].lock();
+      }else{
+        Serial << "Unlocking Door " << i << endl;
+        doors[d].unlock();
+      }
+      current_state.doors[d].relay = resolved_state.doors[d].relay;
+    }
+
+    //check door sensor state
+    if(current_state.doors[d].sensor != resolved_state.doors[d].sensor){
+      current_state.doors[d].sensor = resolved_state.doors[d].sensor;
+    }
+
+  }
+  if(current_state.env_flag != resolved_state.env_flag){
+    //site env flag changed
+    current_state.env_flag = resolved_state.env_flag;
+  }
+
+
+}
+
 
 
 const char* dayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
@@ -51,17 +111,6 @@ void Scheduler::loadFromMemory(uint8_t memConfigStart){
   *((char*)&schedule + t) = EEPROM.read(memConfigStart + 1 + t);
 }
 
-void Scheduler::poll( RtcDateTime dt )
-{
-  int state = getState(dt);
-  if(state == doorScheduleState) return;
-  if(state == DOOR_SCHEDULE_STATE_LOCKED){
-    Serial.println("LOCKING DOOR");
-  }else{
-    Serial.println("UNLOCKING DOOR");
-  }
-  doorScheduleState = state;
-}
 
 uint8_t Scheduler::resolveSensorState(char key){
   if(key == relayState[SENSOR_STATE_UNARMED]) return SENSOR_STATE_UNARMED;
@@ -83,7 +132,6 @@ void Scheduler::add(char **args){
 
   Serial << "Saved Rule to schedule slot: " << endl;
   Serial << rules_count << endl;
-
   int year = atoi(args[1]);
   if(year > 2000) year -= 2000;
   schedule[rules_count].year            = year;
@@ -95,32 +143,29 @@ void Scheduler::add(char **args){
   schedule[rules_count].close_hour      = atoi(args[7]);
   schedule[rules_count].close_min       = atoi(args[8]);
 
-
-  schedule[rules_count].door1_relay = resolveRelayState(args[9][0]);
-  schedule[rules_count].door1_sensor = resolveSensorState(args[9][1]);
-
-  schedule[rules_count].door2_relay = resolveRelayState(args[10][0]);
-  schedule[rules_count].door2_sensor = resolveSensorState(args[10][1]);
-
-  schedule[rules_count].door3_relay = resolveRelayState(args[11][0]);
-  schedule[rules_count].door3_sensor = resolveSensorState(args[11][1]);
-
-  schedule[rules_count].door4_relay = resolveRelayState(args[12][0]);
-  schedule[rules_count].door4_sensor = resolveSensorState(args[12][1]);
+  int p = 9;
+  for (uint8_t d=0; d<NUM_OF_DOORS; d++){
+    schedule[rules_count].doors[d].relay = resolveRelayState(args[p][0]);
+    schedule[rules_count].doors[d].sensor = resolveSensorState(args[p][1]);
+    p++;
+  }
 
   schedule[rules_count].env_flag = ENV_STATE_NONE;
   schedule[rules_count].rule_flag  = RULE_FLAG_NONE;
 
   for (int i=0; i<6; i++)
   {
-    if(args[13][0] == envState[i]){
+    if(args[p][0] == envState[i]){
       schedule[rules_count].env_flag = i;
       break;
     }
   }
-  if(args[14][0] == ruleFlag[RULE_FLAG_FINAL]){
+  p++;
+
+  if(args[p][0] == ruleFlag[RULE_FLAG_FINAL]){
     schedule[rules_count].rule_flag = RULE_FLAG_FINAL;
   }
+
   rules_count++;
 
 }
@@ -167,7 +212,13 @@ void printPad(int8_t num){
 void Scheduler::list(){
 
     Serial.println(F("-- Basic Door Controller"));
-    Serial.println(F("YEAR-MONTH-DAY\tDOW\tSTART-END\tDR1\tDR2\tDR3\tDR4\tSITE\tRULE\t_metric\t_match"));
+    Serial.print(F("YEAR-MONTH-DAY\tDOW\tSTART-END"));
+
+    for (uint8_t d=0; d<NUM_OF_DOORS; d++){
+      Serial << "\tDR" << d;
+    }
+
+    Serial.println(F("\tSITE\tRULE\t_metric\t_match\t_aged\t_until"));
 
     for (int i=0; i<rules_count; i++)
     {
@@ -190,26 +241,22 @@ void Scheduler::list(){
       Serial << ":";
       printPad(schedule[i].close_min);
 
+      for (uint8_t d=0; d<NUM_OF_DOORS; d++){
+        Serial << "\t" << _BYTE(relayState[ schedule[i].doors[d].relay]) << _BYTE(sensorState[schedule[i].doors[d].sensor]);
+      }
+
       Serial << "\t"
-        << _BYTE(relayState[ schedule[i].door1_relay])
-        << _BYTE(sensorState[schedule[i].door1_sensor])
-      << "\t"
-        << _BYTE(relayState[ schedule[i].door2_relay ])
-        << _BYTE(sensorState[schedule[i].door2_sensor])
-      << "\t"
-        << _BYTE(relayState[ schedule[i].door3_relay])
-        << _BYTE(sensorState[schedule[i].door3_sensor])
-      << "\t"
-        << _BYTE(relayState[ schedule[i].door4_relay])
-        << _BYTE(sensorState[schedule[i].door4_sensor])
-      << "\t"
         << _BYTE(envState[ schedule[i].env_flag ])
       << "\t"
         << _BYTE(ruleFlag[ schedule[i].rule_flag ])
       << "\t"
-        << _DEC(schedule[i].metric)
+        << _DEC(schedule_metric[i].metric)
       << "\t"
-        << _DEC(schedule[i].match)
+        << _DEC(schedule_metric[i].match)
+      << "\t"
+        << _DEC(schedule_metric[i].minutes_since)
+      << "\t"
+        << _DEC(schedule_metric[i].minutes_until)
       << endl;
     }
 }
@@ -226,36 +273,17 @@ void Scheduler::list(){
 //     }
 // }
 
-uint8_t Scheduler::resolveDayStateOfSchedule(RtcDateTime dt, ScheduleType rule){
 
-  //open hours set?
-  if(rule.open_hour < 0 || rule.close_hour < 0){
-    minutes_till_open = 0;
-    minutes_till_close = 0;
-    Serial << "Open or Close Hour not set. Error." << endl;
-    return -1;
-  }
-  //so... are we open?  ...24h format, convert to minutes
-  int open = (rule.open_hour * 60) + rule.open_min;
-  int close = (rule.close_hour * 60) + rule.close_min;
-  int current = (dt.Hour() * 60) + dt.Minute();
-
-  minutes_till_open = open - current;
-  minutes_till_close = close - current;
-
-  if(minutes_till_open < 0) minutes_till_open = 0;
-  if(minutes_till_close < 0) minutes_till_close = 0;
-
-  //Serial.print(open); Serial.print(" "); Serial.print(close); Serial.print(" "); Serial.println(current);
-
-  if(current >= open && current <= close){
-    return DOOR_SCHEDULE_STATE_UNLOCKED;
-  }else{
-    return DOOR_SCHEDULE_STATE_LOCKED;
-  }
-}
 
 void Scheduler::status(){
+
+  uint8_t i;
+
+  for(i=0; i<NUM_OF_DOORS; i++){
+    Serial << "Door\t" << i << ",\tValue:\t" << doors[i].getValue() << ",\tState:\t" <<  doors[i].getState() << "\tRelay:\t" <<  doors[i].getRelayState() << endl;
+  }
+
+
   if(minutes_till_open > 0){
     Serial.print("Site will be opening in ");
     Serial.print(minutes_till_open);
@@ -268,19 +296,26 @@ void Scheduler::status(){
   }
 }
 
-uint8_t Scheduler::getState(RtcDateTime dt){
+void Scheduler::setDoorState(uint8_t door, uint8_t state ){
+  Serial << "Set Door " << door << " State " << state << endl;
 
-  if(rules_count < 1){
-    minutes_till_open = 0;
-    minutes_till_close = 0;
-    return DOOR_SCHEDULE_STATE_LOCKED;
-  }
+  if(state == RELAY_STATE_LOCKED) doors[door].lock();
+  if(state == RELAY_STATE_UNLOCKED) doors[door].unlock();
+
+}
+
+
+
+void Scheduler::evalState(RtcDateTime dt){
+  if(rules_count < 1) return;
 
     //RtcDateTime dt = _RTC.GetDateTime();
     for (uint8_t i=0; i<rules_count; i++)
     {
-      schedule[i].metric = 0;
-      schedule[i].match = false;
+      schedule_metric[i].metric = 0;
+      schedule_metric[i].match = false;
+      schedule_metric[i].minutes_until = -1;
+      schedule_metric[i].minutes_since = -1;
     }
 
     for (uint8_t i=0; i<rules_count; i++)
@@ -289,21 +324,21 @@ uint8_t Scheduler::getState(RtcDateTime dt){
         //no exact match, look for ANY match, no metric point
 
         if(schedule[i].year == (dt.Year()-2000) ){
-          schedule[i].metric+=50;
+          schedule_metric[i].metric+=50;
         }else{
           if(schedule[i].year != MATCH_ANY)
             continue;
         }
 
         if(schedule[i].month == dt.Month() ){
-          schedule[i].metric+=50;
+          schedule_metric[i].metric+=50;
         }else{
           if(schedule[i].month != MATCH_ANY)
             continue;
         }
 
         if(schedule[i].day == dt.Day() ){
-          schedule[i].metric+=50;
+          schedule_metric[i].metric+=50;
         }else{
           if(schedule[i].day != MATCH_ANY)
             continue;
@@ -311,14 +346,14 @@ uint8_t Scheduler::getState(RtcDateTime dt){
         }
 
         if(schedule[i].dow == dt.DayOfWeek() ){
-          schedule[i].metric+=50;
+          schedule_metric[i].metric+=50;
         }else{
           if(schedule[i].dow != MATCH_ANY)
             continue;
 
         }
 
-        if(schedule[i].metric > 150){
+        if(schedule_metric[i].metric > 150){
           //THIS IS NOT VALID, match my year, month, day, and dow??
         }
 
@@ -327,20 +362,21 @@ uint8_t Scheduler::getState(RtcDateTime dt){
         int current = (dt.Hour() * 60) + dt.Minute();
 
         if(current >= open && current <= close){
-          schedule[i].match = true;
+          schedule_metric[i].match = true;
           int tm = ( ( ((1440 - (close - open) ) * 100) /1440 ) * 50 )/ 100;
-          schedule[i].metric+=tm;
+          schedule_metric[i].metric+=tm;
+
         }
 
-        //
-        // minutes_till_open = open - current;
-        // minutes_till_close = close - current;
-        //
-        // if(minutes_till_open < 0) minutes_till_open = 0;
-        // if(minutes_till_close < 0) minutes_till_close = 0;
+        int minutes_until = open - current;
+        int minutes_since = close - current;
+        if(minutes_until > 0){
+          schedule_metric[i].minutes_until = minutes_until;
+        }else if(minutes_since > 0){
+          schedule_metric[i].minutes_since = minutes_since;
+        }
 
       }
 
-      //return DOOR_SCHEDULE_STATE_LOCKED;
-      return 0;
+      return;
     }

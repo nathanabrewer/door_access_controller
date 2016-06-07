@@ -8,8 +8,9 @@
 #include <RtcDS3231.h>
 //#include <RtcTemperature.h>
 #include <RtcUtility.h>
-#include <door.h>
+
 #include "Scheduler.h"
+#include <SoftwareSerial.h>
 
 #include "pins_arduino.h"
 #include <avr/pgmspace.h>
@@ -25,16 +26,17 @@ static uint8_t *wg_msg_ptr;
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
+//SoftwareSerial Serial_TTY(11, 12);
 RtcDS3231 Rtc;
 //RtcDS1307 Rtc;
 
 int loopCount=0;
 int rules_count = 0;
 
-DoorSensor door1;
-DoorSensor door2;
-DoorSensor door3;
-DoorSensor door4;
+// DoorSensor door1;
+// DoorSensor door2;
+// DoorSensor door3;
+// DoorSensor door4;
 
 Scheduler schedule1;
 
@@ -81,6 +83,10 @@ void loop()
   {
       cmd_handler();
   }
+  // if(Serial_TTY.available())
+  // {
+  //   tty_handler();
+  // }
 
   loopCount++;
   if(loopCount == 25500){
@@ -92,10 +98,10 @@ void loop()
 
     schedule1.poll(now);
 
-    door1.poll();
-    door2.poll();
-    door3.poll();
-    door4.poll();
+    // door1.poll();
+    // door2.poll();
+    // door3.poll();
+    // door4.poll();
 
     //keypad.poll();
   }
@@ -232,18 +238,14 @@ void cmd_parse(char *cmd)
   if (memcmp(argv[0], "set", 3) == 0){
     if (memcmp(argv[1], "lock", 4) == 0){
       int8_t d = atol(argv[2]);
-      if(d == 1) door1.lock();
-      if(d == 2) door2.lock();
-      if(d == 3) door3.lock();
-      if(d == 4) door4.lock();
+      //RELAY_STATE_LOCKED
+      schedule1.setDoorState(d, 2);
       return;
     }
     if (memcmp(argv[1], "unlock", 6) == 0){
       int8_t d = atol(argv[2]);
-      if(d == 1) door1.unlock();
-      if(d == 2) door2.unlock();
-      if(d == 3) door3.unlock();
-      if(d == 4) door4.unlock();
+      //RELAY_STATE_UNLOCKED
+      schedule1.setDoorState(d, 1);
       return;
     }
     if (memcmp(argv[1], "time", 3) == 0){
@@ -293,6 +295,22 @@ int freeRam ()
   int v;
   return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
 }
+
+// void tty_handler()
+// {
+//   char c = Serial_TTY.read();
+//   switch (c)
+//   {
+//   case '\n':
+//       *msg_ptr = '\0';
+//       cmd_parse((char *)msg);
+//       msg_ptr = msg;
+//       break;
+//   default:
+//       *msg_ptr++ = c;
+//       break;
+//   }
+// }
 
 void cmd_handler()
 {
@@ -569,12 +587,15 @@ void setup()
 
   RTCSetup();
   //keypad =  Keypad();
-  door1.setPin(A0, 2);
-  door2.setPin(A1, 3);
-  door3.setPin(A2, 9);
-  door4.setPin(A3, 7);
+  // door1.setPin(A0, 2);
+  // door2.setPin(A1, 3);
+  // door3.setPin(A2, 9);
+  // door4.setPin(A3, 7);
 
   schedule1.loadFromMemory(1);
+  schedule1.init();
+
+
   cmd_display();
 
   //KEYPAD
