@@ -43,8 +43,8 @@ Scheduler schedule1;
 //Keypad keypad;
 
 
-const int WiegandData1 = 4;
-const int WiegandData0 = 5;
+const int WiegandData1 = A6;
+const int WiegandData0 = A7;
 volatile long readerBits = 0;
 volatile int readerBitCount = 0;
 
@@ -275,13 +275,6 @@ void cmd_parse(char *cmd)
     }
     schedule1.add(argv);
     return;
-
-    // char *ptr = &cmd[0];
-    // ptr = &cmd[5];
-    //     char year[5];
-    //     memcpy ( year, ptr, 4 );
-    //     year[5] = '\0';
-    //     ptr += 5;
   }
 
   Serial.println(F("Unknown Command (try help)"));
@@ -364,26 +357,18 @@ void cmd_handler()
     must use some algorithm to implement an interrupt service routine
     by terminal
     Correspondenicas terminal and to interrupt masking registers:
-    D0-D7 => 16-23 = PCIR2 PCInt = PD = PCIE2 = pcmsk2
-    D8-D13 => 0-5 = PCIR0 PCInt = PB = PCIE0 = pcmsk0
-    A0-A5 (D14-D19) => 8-13 = PCIR1 PCInt = PC = PCIE1 = pcmsk1
+      D0-D7 => 16-23 = PCIR2 PCInt = PD = PCIE2 = pcmsk2
+      D8-D13 => 0-5 = PCIR0 PCInt = PB = PCIE0 = pcmsk0
+      A0-A5 (D14-D19) => 8-13 = PCIR1 PCInt = PC = PCIE1 = pcmsk1
    */
 
-  volatile uint8_t *port_to_pcmask[] = {
-    &PCMSK0,
-    &PCMSK1,
-    &PCMSK2
-  };
+  volatile uint8_t *port_to_pcmask[] = { &PCMSK0, &PCMSK1, &PCMSK2 };
 
   typedef void (*voidFuncPtr)(void);
-
-  volatile static voidFuncPtr PCintFunc[24] = {
-    NULL };
-
+  volatile static voidFuncPtr PCintFunc[24] = { NULL };
   volatile static uint8_t PCintLast[3];
 
   void PCattachInterrupt(uint8_t pin, void (*userFunc)(void), int mode) {
-
       uint8_t bit = digitalPinToBitMask(pin);
       uint8_t port = digitalPinToPort(pin);
       uint8_t slot;
@@ -397,11 +382,10 @@ void cmd_handler()
 
 
       if (port == NOT_A_PORT) {
-      return;
-      }
-      else {
-      port -= 2;
-      pcmask = port_to_pcmask[port];
+        return;
+      }else{
+        port -= 2;
+        pcmask = port_to_pcmask[port];
       }
 
       slot = port * 8 + (pin % 8);
@@ -415,7 +399,6 @@ void cmd_handler()
   }
 
   static void PCint(uint8_t port) {
-
       uint8_t bit;
       uint8_t curr;
       uint8_t mask;
@@ -454,7 +437,7 @@ void cmd_handler()
   //***************** ^^ Code for managing interruptions ^^ ********************
   //*********** vv Code for counting and storing bits vv **********
   void readerOne(void) {
-    if(digitalRead(4) == LOW){
+    if(digitalRead(WiegandData1) == LOW){
      readerBitCount++;
      readerBits = readerBits << 1;  //Move the bits ...
      readerBits |= 1;  // ... add a bit to '1 'in the least significant bit
@@ -463,7 +446,7 @@ void cmd_handler()
   }
 
   void readerZero(void) {
-    if(digitalRead(5) == LOW){
+    if(digitalRead(WiegandData0) == LOW){
      readerBitCount++;
      readerBits = readerBits << 1;  //Move the bits ...
 
@@ -473,6 +456,7 @@ void cmd_handler()
 
 
   //*********** ^^ Code for counting and storing bits ^^ **********
+
 
 
 

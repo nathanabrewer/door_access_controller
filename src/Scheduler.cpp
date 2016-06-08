@@ -23,9 +23,13 @@ enum rule_flag {RULE_FLAG_NONE, RULE_FLAG_FINAL};
 
 void Scheduler::init(){
   doors[0].setPin(A0, 2);
+  digitalWrite(A0, LOW);
   doors[1].setPin(A1, 3);
-  doors[2].setPin(A2, 9);
-  doors[3].setPin(A3, 7);
+  digitalWrite(A1, LOW);
+  doors[2].setPin(A2, 4);
+  digitalWrite(A2, HIGH);
+  doors[3].setPin(A3, 5);
+  digitalWrite(A3, HIGH);
 
 }
 
@@ -74,10 +78,10 @@ void Scheduler::poll( RtcDateTime dt )
     //check relay state
     if(current_state.doors[d].relay != resolved_state.doors[d].relay){
       if(resolved_state.doors[d].relay == RELAY_STATE_LOCKED || resolved_state.doors[d].relay == RELAY_STATE_FORCE_LOCK){
-        Serial << "Locking Door " << i << endl;
+        Serial << "Locking Door " << d << endl;
         doors[d].lock();
       }else{
-        Serial << "Unlocking Door " << i << endl;
+        Serial << "Unlocking Door " << d << endl;
         doors[d].unlock();
       }
       current_state.doors[d].relay = resolved_state.doors[d].relay;
