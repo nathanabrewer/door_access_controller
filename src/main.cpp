@@ -20,8 +20,11 @@ static uint8_t *wg_msg_ptr;
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
 //SoftwareSerial Serial_TTY(11, 12);
-RtcDS3231 Rtc;
-//RtcDS1307 Rtc;
+#if DS3231
+  RtcDS3231 Rtc;
+#else
+  RtcDS1307 Rtc;
+#endif
 
 int loopCount=0;
 int rules_count = 0;
@@ -57,14 +60,18 @@ void printDateTime(const RtcDateTime& dt)
       dt.Second() );
     Serial.print(datestring);
 }
+
+
 void command_status(){
-  //RtcTemperature temp = Rtc.GetTemperature();
+  #if DS3231
+    RtcTemperature temp = Rtc.GetTemperature();
+    Serial.print(F("Tempature of controller and RTC is currently "));
+    Serial.print(temp.AsFloat());
+    Serial.println("C ");
+  #endif
+
   RtcDateTime now = Rtc.GetDateTime();
   schedule1.status();
-
-  //Serial.print(F("Tempature of controller and RTC is currently "));
-  //Serial.print(temp.AsFloat());
-  //Serial.println("C ");
 
   Serial.print(F("Current Time: "));
   printDateTime(now);
@@ -74,6 +81,7 @@ void command_status(){
   Serial.println(" ");
 
 }
+
 void command_help()
 {
     Serial.println(F("help\tthis menu"));
@@ -90,6 +98,7 @@ void command_save(){
   schedule1.save(1);
   users.save(200);
 }
+
 void command_clear(){
   Serial << "Clearing Schedule..." << endl;
   schedule1.clearAll();
@@ -118,6 +127,7 @@ void keypadOk(){
   delay(600);
 
 }
+
 void keypadErr(){
   int8_t i;
   for(i=1; i<3; i++){
@@ -129,6 +139,7 @@ void keypadErr(){
     delay(200);
   }
 }
+
 void welcomeKeypad(){
   pinMode(KEYPAD_BUZZER, OUTPUT);
   pinMode(KEYPAD_LED, OUTPUT);
@@ -149,8 +160,6 @@ void cmd_parse(char *cmd)
   argv[i] = strtok(cmd, " ");
   do { argv[++i] = strtok(NULL, " ");
   } while ((i < 30) && (argv[i] != NULL));
-
-
 
   if (memcmp(argv[0], "save", 4) == 0)
     return command_save();
@@ -258,10 +267,6 @@ void cmd_handler()
 
 
 void RTCSetup(){
-
-
-
-
   //--------RTC SETUP ------------
   Rtc.Begin();
   RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
@@ -269,7 +274,6 @@ void RTCSetup(){
   Serial.println(__DATE__);
   Serial.println(__TIME__);
 
-  //Rtc.SetDateTime(compiled);
   if (!Rtc.IsDateTimeValid())
   {
       Serial.println("RTC lost confidence in the DateTime!");
@@ -283,7 +287,7 @@ void RTCSetup(){
   RtcDateTime now = Rtc.GetDateTime();
   if (now > compiled)
   {
-      Serial.println("RTC is older than compile time!  (Updating DateTime)");
+      Serial.println(F("RTC is older than compile time!  (Updating DateTime)"));
       Rtc.SetDateTime(compiled);
   }
   // never assume the Rtc was last configured by you, so
@@ -305,13 +309,6 @@ void p(char *fmt, ... ){
         Serial.print(buf);
 }
 
-
-
-
-
-
-
-
 void cmd_display()
 {
     Serial.println();
@@ -321,17 +318,24 @@ void cmd_display()
     Serial.print("# ");
 }
 
-const char testcommand[] = "TEST";
 
 
 
+//WIEGAND... read bits, called by interrupts
+void readerOne(void) {
+  if(digitalRead(WIEGAND_DATA1_PIN) == LOW){
+   readerBitCount++;
+   readerBits = readerBits << 1;  //Move the bits ...
+   readerBits |= 1;  // ... add a bit to '1 'in the least significant bit
+  }
+}
 
-
-
-
-
-
-
+void readerZero(void) {
+  if(digitalRead(WIEGAND_DATA0_PIN) == LOW){
+   readerBitCount++;
+   readerBits = readerBits << 1;  //Move the bits ...
+  }
+}
 
 
 
@@ -424,28 +428,10 @@ const char testcommand[] = "TEST";
 
   //***************** ^^ Code for managing interruptions ^^ ********************
   //*********** vv Code for counting and storing bits vv **********
-  void readerOne(void) {
-
-    if(digitalRead(WIEGAND_DATA1_PIN) == LOW){
-     readerBitCount++;
-     readerBits = readerBits << 1;  //Move the bits ...
-     readerBits |= 1;  // ... add a bit to '1 'in the least significant bit
-    }
-
-  }
-
-  void readerZero(void) {
-
-    if(digitalRead(WIEGAND_DATA0_PIN) == LOW){
-     readerBitCount++;
-     readerBits = readerBits << 1;  //Move the bits ...
-
-    }
-
-  }
 
 
-  //*********** ^^ Code for counting and storing bits ^^ **********
+
+
 
   unsigned long keypadToLong(char *cmd)
   {
@@ -581,8 +567,8 @@ void setup()
   //KEYPAD
 
   #if DC_MEGA
-    attachInterrupt(0, readerOne, CHANGE);
-    attachInterrupt(1, readerZero, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(WIEGAND_DATA1_PIN), readerOne, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(WIEGAND_DATA0_PIN), readerZero, CHANGE);
 
   #else
     PCattachInterrupt(WIEGAND_DATA1_PIN, readerOne, CHANGE);
