@@ -1,8 +1,6 @@
-#include <RtcDS3231.h>
-#include <door.h>
+#include "door.h"
+#include "config.h"
 
-#define MAX_SCHEDULE_SIZE 10
-#define NUM_OF_DOORS 4
 
 class ScheduleDoor {
 public:

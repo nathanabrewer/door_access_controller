@@ -1,7 +1,8 @@
 #include <Arduino.h>
 #include <Streaming.h>
 #include "Scheduler.h"
-#include "EEPROM.h"
+#include "config.h"
+
 
 #define DEFAULT_RELAY_STATE 2
 #define DEFAULT_SENSOR_STATE 1
@@ -22,14 +23,22 @@ enum rule_flag {RULE_FLAG_NONE, RULE_FLAG_FINAL};
 
 
 void Scheduler::init(){
-  doors[0].setPin(A0, 2);
-  digitalWrite(A0, LOW);
-  doors[1].setPin(A1, 3);
-  digitalWrite(A1, LOW);
-  doors[2].setPin(A2, 4);
-  digitalWrite(A2, HIGH);
-  doors[3].setPin(A3, 5);
-  digitalWrite(A3, HIGH);
+
+  #if DC_MEGA
+    doors[0].setPin(A8, 22);
+    doors[1].setPin(A9, 23);
+    doors[2].setPin(A10, 24);
+    doors[3].setPin(A11, 25);
+    doors[4].setPin(A12, 26);
+    doors[5].setPin(A13, 27);
+    doors[6].setPin(A14, 28);
+    doors[7].setPin(A15, 29);
+  #else
+    doors[0].setPin(A0, 2);
+    doors[1].setPin(A1, 3);
+    doors[2].setPin(A2, 4);
+    doors[3].setPin(A3, 5);
+  #endif
 
 }
 

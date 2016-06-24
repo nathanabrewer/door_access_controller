@@ -27,11 +27,17 @@ int DoorSensor::getRelayState(){
 void DoorSensor::lock( )
 {
   relay_lock_state = true;
+  Serial.print("LOCK SET PIN HIGH - PIN:");
+  Serial.println(relay_pin);
+
   digitalWrite(relay_pin, HIGH);
 }
 void DoorSensor::unlock( )
 {
   relay_lock_state = false;
+  Serial.print("LOCK SET PIN LOW - PIN:");
+  Serial.println(relay_pin);
+
   digitalWrite(relay_pin, LOW);
 }
 

@@ -2,21 +2,14 @@
 #include <Arduino.h>
 #include <Streaming.h>
 #include <Wire.h>  // must be incuded here so that Arduino library object file references work
-#include <RtcDateTime.h>
-//#include <RtcDS1307.h>
-
-#include <RtcDS3231.h>
-//#include <RtcTemperature.h>
-#include <RtcUtility.h>
 
 #include "Scheduler.h"
-#include <SoftwareSerial.h>
+#include "Users.h"
 
 #include "pins_arduino.h"
 #include <avr/pgmspace.h>
+#include "config.h"
 
-#define KEYPAD_BUZZER 11
-#define KEYPAD_LED 12
 
 static uint8_t msg[60]; // command line message buffer and pointer
 static uint8_t *msg_ptr;
@@ -33,135 +26,19 @@ RtcDS3231 Rtc;
 int loopCount=0;
 int rules_count = 0;
 
-// DoorSensor door1;
-// DoorSensor door2;
-// DoorSensor door3;
-// DoorSensor door4;
-
 Scheduler schedule1;
+Users users;
 
-//Keypad keypad;
 
 
-const int WiegandData1 = A6;
-const int WiegandData0 = A7;
 volatile long readerBits = 0;
 volatile int readerBitCount = 0;
 
-
-void command_help()
+int freeRam ()
 {
-    Serial.println(F("help\tthis menu"));
-    Serial.println(F("list\tlist current schedule"));
-    Serial.println(F("add\tadd to schedule"));
-    Serial.println(F("clear\tclear schedule"));
-    Serial.println(F("status\tstats... open/close, time, temp"));
-    Serial.println(F("set time <SecondsSince2000>\tSet the Time, Duh"));
-    //JS: Math.floor((b.getTime() - a.getTime())/1000)-(7*60*60);
-}
-
-void command_save(){
-  Serial << "Saving Schedule..." << endl;
-  schedule1.save(1);
-}
-void command_clear(){
-  Serial << "Clearing Schedule..." << endl;
-  schedule1.clearAll();
-}
-
-void command_list(){
-  schedule1.list();
-}
-
-
-
-void loop()
-{
-  handle_keypad_buffer();
-
-  if (Serial.available())
-  {
-      cmd_handler();
-  }
-  // if(Serial_TTY.available())
-  // {
-  //   tty_handler();
-  // }
-
-  loopCount++;
-  if(loopCount == 25500){
-    if (!Rtc.IsDateTimeValid()){
-        //Serial.println("RTC lost confidence in the DateTime!");
-    }
-    loopCount=0;
-    RtcDateTime now = Rtc.GetDateTime();
-
-    schedule1.poll(now);
-
-    // door1.poll();
-    // door2.poll();
-    // door3.poll();
-    // door4.poll();
-
-    //keypad.poll();
-  }
-}
-
-
-
-void command_status(){
-  //RtcTemperature temp = Rtc.GetTemperature();
-  RtcDateTime now = Rtc.GetDateTime();
-  schedule1.status();
-
-  //Serial.print(F("Tempature of controller and RTC is currently "));
-  //Serial.print(temp.AsFloat());
-  //Serial.println("C ");
-
-  Serial.print(F("Current Time: "));
-  printDateTime(now);
-  Serial.println(" ");
-  Serial.print(F("free SRAM: "));
-  Serial.println(freeRam());
-  Serial.println(" ");
-
-}
-
-
-void RTCSetup(){
-
-
-
-
-  //--------RTC SETUP ------------
-  Rtc.Begin();
-  RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
-  Serial.println("BUILD DATE TIME:");
-  Serial.println(__DATE__);
-  Serial.println(__TIME__);
-
-  //Rtc.SetDateTime(compiled);
-  if (!Rtc.IsDateTimeValid())
-  {
-      Serial.println("RTC lost confidence in the DateTime!");
-      Rtc.SetDateTime(compiled);
-  }
-  if (!Rtc.GetIsRunning())
-  {
-      Serial.println("RTC was not actively running, starting now");
-      Rtc.SetIsRunning(true);
-  }
-  RtcDateTime now = Rtc.GetDateTime();
-  if (now > compiled)
-  {
-      Serial.println("RTC is older than compile time!  (Updating DateTime)");
-      Rtc.SetDateTime(compiled);
-  }
-  // never assume the Rtc was last configured by you, so
-  // just clear them to your needed state
-
-  //Rtc.Enable32kHzPin(false);
-  //Rtc.SetSquareWavePin(DS3231SquareWavePin_ModeNone);
+  extern int __heap_start, *__brkval;
+  int v;
+  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
 }
 
 void printDateTime(const RtcDateTime& dt)
@@ -180,35 +57,90 @@ void printDateTime(const RtcDateTime& dt)
       dt.Second() );
     Serial.print(datestring);
 }
+void command_status(){
+  //RtcTemperature temp = Rtc.GetTemperature();
+  RtcDateTime now = Rtc.GetDateTime();
+  schedule1.status();
 
-void p(char *fmt, ... ){
-        char buf[128]; // resulting string limited to 128 chars
-        va_list args;
-        va_start (args, fmt );
-        vsnprintf(buf, 128, fmt, args);
-        va_end (args);
-        //rpi.print(buf);
-        Serial.print(buf);
+  //Serial.print(F("Tempature of controller and RTC is currently "));
+  //Serial.print(temp.AsFloat());
+  //Serial.println("C ");
+
+  Serial.print(F("Current Time: "));
+  printDateTime(now);
+  Serial.println(" ");
+  Serial.print(F("free SRAM: "));
+  Serial.println(freeRam());
+  Serial.println(" ");
+
 }
-
-
-
-
-
-
-
-
-void cmd_display()
+void command_help()
 {
-    char buf[50];
-    Serial.println();
-    Serial.println("DOOR CONTROLLER");
-    Serial.println("");
-    Serial.println("");
-    Serial.print("# ");
+    Serial.println(F("help\tthis menu"));
+    Serial.println(F("list\tlist current schedule"));
+    Serial.println(F("add\tadd to schedule"));
+    Serial.println(F("clear\tclear schedule"));
+    Serial.println(F("status\tstats... open/close, time, temp"));
+    Serial.println(F("set time <SecondsSince2000>\tSet the Time, Duh"));
+    //JS: Math.floor((b.getTime() - a.getTime())/1000)-(7*60*60);
 }
 
-const char testcommand[] = "TEST";
+void command_save(){
+  Serial << "Saving Schedule..." << endl;
+  schedule1.save(1);
+  users.save(200);
+}
+void command_clear(){
+  Serial << "Clearing Schedule..." << endl;
+  schedule1.clearAll();
+}
+
+void command_list(){
+  schedule1.list();
+}
+
+void showCode(unsigned long code)
+{
+
+  Serial.print(F("RX KEY/CARD >> "));
+  char tmp[12];
+  ultoa(code, tmp, 10);
+  Serial.println(code);
+}
+
+
+
+void keypadOk(){
+  digitalWrite(KEYPAD_LED, LOW);
+  digitalWrite(KEYPAD_BUZZER, LOW);
+  delay(100);
+  digitalWrite(KEYPAD_BUZZER, HIGH);
+  delay(600);
+
+}
+void keypadErr(){
+  int8_t i;
+  for(i=1; i<3; i++){
+    digitalWrite(KEYPAD_LED, LOW);
+    digitalWrite(KEYPAD_BUZZER, LOW);
+    delay(100);
+    digitalWrite(KEYPAD_LED, HIGH);
+    digitalWrite(KEYPAD_BUZZER, HIGH);
+    delay(200);
+  }
+}
+void welcomeKeypad(){
+  pinMode(KEYPAD_BUZZER, OUTPUT);
+  pinMode(KEYPAD_LED, OUTPUT);
+  int8_t i;
+  for(i=1; i<5; i++){
+    keypadOk();
+  }
+  digitalWrite(KEYPAD_LED, HIGH);
+  digitalWrite(KEYPAD_BUZZER, HIGH);
+}
+
+
 void cmd_parse(char *cmd)
 {
   uint8_t i;
@@ -235,6 +167,14 @@ void cmd_parse(char *cmd)
   if (memcmp(argv[0], "status", 6) == 0)
     return command_status();
 
+  if (memcmp(argv[0], "kpOK", 4) == 0){
+    keypadOk();
+    return;
+  }
+  if (memcmp(argv[0], "kpERR", 5) == 0){
+    keypadErr();
+    return;
+  }
   if (memcmp(argv[0], "set", 3) == 0){
     if (memcmp(argv[1], "lock", 4) == 0){
       int8_t d = atol(argv[2]);
@@ -282,28 +222,6 @@ void cmd_parse(char *cmd)
 
 }
 
-int freeRam ()
-{
-  extern int __heap_start, *__brkval;
-  int v;
-  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
-}
-
-// void tty_handler()
-// {
-//   char c = Serial_TTY.read();
-//   switch (c)
-//   {
-//   case '\n':
-//       *msg_ptr = '\0';
-//       cmd_parse((char *)msg);
-//       msg_ptr = msg;
-//       break;
-//   default:
-//       *msg_ptr++ = c;
-//       break;
-//   }
-// }
 
 void cmd_handler()
 {
@@ -335,6 +253,76 @@ void cmd_handler()
         break;
     }
 }
+
+
+
+
+void RTCSetup(){
+
+
+
+
+  //--------RTC SETUP ------------
+  Rtc.Begin();
+  RtcDateTime compiled = RtcDateTime(__DATE__, __TIME__);
+  Serial.println("BUILD DATE TIME:");
+  Serial.println(__DATE__);
+  Serial.println(__TIME__);
+
+  //Rtc.SetDateTime(compiled);
+  if (!Rtc.IsDateTimeValid())
+  {
+      Serial.println("RTC lost confidence in the DateTime!");
+      Rtc.SetDateTime(compiled);
+  }
+  if (!Rtc.GetIsRunning())
+  {
+      Serial.println("RTC was not actively running, starting now");
+      Rtc.SetIsRunning(true);
+  }
+  RtcDateTime now = Rtc.GetDateTime();
+  if (now > compiled)
+  {
+      Serial.println("RTC is older than compile time!  (Updating DateTime)");
+      Rtc.SetDateTime(compiled);
+  }
+  // never assume the Rtc was last configured by you, so
+  // just clear them to your needed state
+
+  //Rtc.Enable32kHzPin(false);
+  //Rtc.SetSquareWavePin(DS3231SquareWavePin_ModeNone);
+}
+
+
+
+void p(char *fmt, ... ){
+        char buf[128]; // resulting string limited to 128 chars
+        va_list args;
+        va_start (args, fmt );
+        vsnprintf(buf, 128, fmt, args);
+        va_end (args);
+        //rpi.print(buf);
+        Serial.print(buf);
+}
+
+
+
+
+
+
+
+
+void cmd_display()
+{
+    Serial.println();
+    Serial.println("DOOR CONTROLLER");
+    Serial.println("");
+    Serial.println("");
+    Serial.print("# ");
+}
+
+const char testcommand[] = "TEST";
+
 
 
 
@@ -437,7 +425,8 @@ void cmd_handler()
   //***************** ^^ Code for managing interruptions ^^ ********************
   //*********** vv Code for counting and storing bits vv **********
   void readerOne(void) {
-    if(digitalRead(WiegandData1) == LOW){
+
+    if(digitalRead(WIEGAND_DATA1_PIN) == LOW){
      readerBitCount++;
      readerBits = readerBits << 1;  //Move the bits ...
      readerBits |= 1;  // ... add a bit to '1 'in the least significant bit
@@ -446,7 +435,8 @@ void cmd_handler()
   }
 
   void readerZero(void) {
-    if(digitalRead(WiegandData0) == LOW){
+
+    if(digitalRead(WIEGAND_DATA0_PIN) == LOW){
      readerBitCount++;
      readerBits = readerBits << 1;  //Move the bits ...
 
@@ -457,11 +447,32 @@ void cmd_handler()
 
   //*********** ^^ Code for counting and storing bits ^^ **********
 
-
+  unsigned long keypadToLong(char *cmd)
+  {
+    //YUCK, this is UGLY! ...but it works for now
+    //having issues with null terminated \0 ...it is truncating a keypad code at zero
+    int8_t i, v, l;
+    unsigned long longv;
+    l = strlen(cmd);
+    char temp[10];
+    char t[2];
+    for(i=0; i< l;i++){
+      v = cmd[i];
+      if(v > 47) v = v-48; //bring back to actual value
+      cmd[i] = v;
+      sprintf(t,"%d",v);
+      temp[i] = t[0];
+      //Serial.println(v);
+    }
+    i++;
+    temp[i]='\0';
+    longv = atol (temp);
+    return longv;
+  }
 
 
   void prepWiegand(){
-      for(int i = WiegandData1; i<=WiegandData0; i++){
+      for(int i = WIEGAND_DATA1_PIN; i<=WIEGAND_DATA0_PIN; i++){
          pinMode(i, OUTPUT);
          digitalWrite(i, HIGH); // enable internal pull up causing a one
          digitalWrite(i, LOW);  // disable internal pull up causing zero and thus an interrupt
@@ -544,47 +555,39 @@ void cmd_handler()
 
 
 
-void welcomeKeypad(){
-  pinMode(KEYPAD_BUZZER, OUTPUT);
-  pinMode(KEYPAD_LED, OUTPUT);
-  int8_t i;
-  for(i=1; i<5; i++){
-    digitalWrite(KEYPAD_LED, LOW);
-    digitalWrite(KEYPAD_BUZZER, LOW);
-    delay(100);
-    digitalWrite(KEYPAD_LED, HIGH);
-    digitalWrite(KEYPAD_BUZZER, HIGH);
-    delay(200);
-  }
-  digitalWrite(KEYPAD_LED, HIGH);
-  digitalWrite(KEYPAD_BUZZER, HIGH);
-}
 
 void setup()
 {
-  welcomeKeypad();
+
 
   Serial.begin(57600);
+
+  Serial.println("Int Keypad");
+  welcomeKeypad();
 
   msg_ptr = msg;
   wg_msg_ptr = wgmsg;
 
   RTCSetup();
-  //keypad =  Keypad();
-  // door1.setPin(A0, 2);
-  // door2.setPin(A1, 3);
-  // door3.setPin(A2, 9);
-  // door4.setPin(A3, 7);
+
 
   schedule1.loadFromMemory(1);
   schedule1.init();
+  users.loadFromMemory(200);
 
 
   cmd_display();
 
   //KEYPAD
-  PCattachInterrupt(WiegandData1, readerOne, CHANGE);
-  PCattachInterrupt(WiegandData0, readerZero, CHANGE);
+
+  #if DC_MEGA
+    attachInterrupt(0, readerOne, CHANGE);
+    attachInterrupt(1, readerZero, CHANGE);
+
+  #else
+    PCattachInterrupt(WIEGAND_DATA1_PIN, readerOne, CHANGE);
+    PCattachInterrupt(WIEGAND_DATA0_PIN, readerZero, CHANGE);
+  #endif
   delay(10);
 
   // put the reader input variables to zero
@@ -593,43 +596,29 @@ void setup()
   prepWiegand();
 
 }
-
-
-unsigned long keypadToLong(char *cmd)
+void loop()
 {
-  //YUCK, this is UGLY! ...but it works for now
-  //having issues with null terminated \0 ...it is truncating a keypad code at zero
-  int8_t i, v, l;
-  unsigned long longv;
-  l = strlen(cmd);
-  char temp[10];
-  char t[2];
-  for(i=0; i< l;i++){
-    v = cmd[i];
-    if(v > 47) v = v-48; //bring back to actual value
-    cmd[i] = v;
-    sprintf(t,"%d",v);
-    temp[i] = t[0];
-    //Serial.println(v);
-  }
-  i++;
-  temp[i]='\0';
-  longv = atol (temp);
-  return longv;
-}
+  handle_keypad_buffer();
 
-void showCode(unsigned long code)
-{
-
-  if(code == 6321032){
-    Serial.println(F("Welcome User XYZ"));
-  }
-  if(code == 8818){
-    Serial.println(F("Hey Nate!"));
+  if (Serial.available())
+  {
+      cmd_handler();
   }
 
-  Serial.print(F("RX KEY/CARD >> "));
-  char tmp[12];
-  ultoa(code, tmp, 10);
-  Serial.println(code);
+
+  loopCount++;
+  if(loopCount == 25500){
+
+      digitalWrite(KEYPAD_BUZZER, HIGH);
+      digitalWrite(KEYPAD_LED, HIGH);
+
+    if (!Rtc.IsDateTimeValid()){
+        //Serial.println("RTC lost confidence in the DateTime!");
+    }
+    loopCount=0;
+    RtcDateTime now = Rtc.GetDateTime();
+
+    schedule1.poll(now);
+
+  }
 }
