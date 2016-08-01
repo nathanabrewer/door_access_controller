@@ -5,22 +5,24 @@
 
 #include "Scheduler.h"
 #include "Users.h"
-
+#include "MD5.h"
 #include "pins_arduino.h"
 #include <avr/pgmspace.h>
 #include "config.h"
 
 
-static uint8_t msg[60]; // command line message buffer and pointer
+static uint8_t msg[80]; // command line message buffer and pointer
 static uint8_t *msg_ptr;
 
-static uint8_t wgmsg[10];
-static uint8_t *wg_msg_ptr;
+unsigned long keypadBuffer = 0;
+
+long authorized_timestamp;
+int authorized_user = -1;
 
 #define countof(a) (sizeof(a) / sizeof(a[0]))
 
 //SoftwareSerial Serial_TTY(11, 12);
-#if DS3231
+#if (DS3231 == 1)
   RtcDS3231 Rtc;
 #else
   RtcDS1307 Rtc;
@@ -31,7 +33,7 @@ int rules_count = 0;
 
 Scheduler schedule1;
 Users users;
-
+MD5 md5;
 
 
 volatile long readerBits = 0;
@@ -61,6 +63,18 @@ void printDateTime(const RtcDateTime& dt)
     Serial.print(datestring);
 }
 
+void keypad_buzzer_off(){
+  digitalWrite(KEYPAD_BUZZER, HIGH);
+}
+void keypad_buzzer_on(){
+  digitalWrite(KEYPAD_BUZZER, LOW);
+}
+void keypad_led_off(){
+  digitalWrite(KEYPAD_LED, HIGH);
+}
+void keypad_led_on(){
+  digitalWrite(KEYPAD_LED, LOW);
+}
 
 void command_status(){
   #if DS3231
@@ -85,9 +99,12 @@ void command_status(){
 void command_help()
 {
     Serial.println(F("help\tthis menu"));
-    Serial.println(F("list\tlist current schedule"));
-    Serial.println(F("add\tadd to schedule"));
-    Serial.println(F("clear\tclear schedule"));
+    Serial.println(F("list schedule\tlist current schedule"));
+    Serial.println(F("list users\tlist current schedule"));
+    Serial.println(F("add schedule\tadd to schedule"));
+    Serial.println(F("add user\tadd a user"));
+    Serial.println(F("clear schedule\tclear schedule"));
+    Serial.println(F("clear users\tclear schedule"));
     Serial.println(F("status\tstats... open/close, time, temp"));
     Serial.println(F("set time <SecondsSince2000>\tSet the Time, Duh"));
     //JS: Math.floor((b.getTime() - a.getTime())/1000)-(7*60*60);
@@ -96,25 +113,30 @@ void command_help()
 void command_save(){
   Serial << "Saving Schedule..." << endl;
   schedule1.save(1);
-  users.save(200);
+  users.save(300);
 }
 
-void command_clear(){
-  Serial << "Clearing Schedule..." << endl;
-  schedule1.clearAll();
-}
 
-void command_list(){
-  schedule1.list();
-}
 
-void showCode(unsigned long code)
+void showCode(unsigned long code, bool rfid)
 {
-
-  Serial.print(F("RX KEY/CARD >> "));
-  char tmp[12];
-  ultoa(code, tmp, 10);
+  if(rfid){
+    Serial.print(F("RX RFID >> "));
+    authorized_user = users.lookupRFID(code);
+  }else{
+    Serial.print(F("RX KEYPAD >> "));
+    authorized_user = users.lookupPIN(code);
+  }
   Serial.println(code);
+
+  //see if we got a user we know.
+  if( authorized_user > -1){
+      keypad_led_on();
+      authorized_timestamp = millis();
+      schedule1.guestEntraceRequest();
+      // Success on User AUTH, Turn keypad GREEN
+  }
+
 }
 
 
@@ -167,11 +189,43 @@ void cmd_parse(char *cmd)
   if (memcmp(argv[0], "help", 4) == 0)
     return command_help();
 
-  if (memcmp(argv[0], "list", 4) == 0)
-    return command_list();
+  if (memcmp(argv[0], "list", 4) == 0){
 
-  if (memcmp(argv[0], "clear", 5) == 0)
-    return command_clear();
+    if (memcmp(argv[1], "users", 5) == 0){
+      users.list();
+      return;
+    }
+
+      schedule1.list();
+      return;
+  }
+  if (memcmp(argv[0], "add", 3) == 0){
+
+    if (memcmp(argv[1], "user", 4) == 0){
+      //Users::add(int user_id, long pin, long rfid, uint8_t access_level, bool admin)
+      //md5.make_hash(
+      users.add(atoi(argv[2]), atol(argv[3]), atol(argv[4]), atoi(argv[5]), atoi(argv[6]) );
+      users.list();
+      return;
+    }
+    if (memcmp(argv[1], "schedule", 8) == 0){
+      Serial.println("Try +SCH instead");
+      return;
+    }
+
+  }
+  if (memcmp(argv[0], "clear", 5) == 0){
+    if (memcmp(argv[1], "users", 5) == 0){
+      Serial << "Clearing Users..." << endl;
+      users.clearAll();
+      return;
+    }
+    if (memcmp(argv[1], "schedule", 8) == 0){
+      Serial << "Clearing Schedule..." << endl;
+      schedule1.clearAll();
+      return;
+    }
+  }
 
   if (memcmp(argv[0], "status", 6) == 0)
     return command_status();
@@ -184,6 +238,13 @@ void cmd_parse(char *cmd)
     keypadErr();
     return;
   }
+  if (memcmp(argv[0], "remove", 6) == 0){
+    if (memcmp(argv[1], "schedule", 8) == 0){
+      schedule1.remove( atoi(argv[2]) );
+      return;
+    }
+  }
+
   if (memcmp(argv[0], "set", 3) == 0){
     if (memcmp(argv[1], "lock", 4) == 0){
       int8_t d = atol(argv[2]);
@@ -199,7 +260,6 @@ void cmd_parse(char *cmd)
     }
     if (memcmp(argv[1], "time", 3) == 0){
           int32_t t = atol(argv[2]);
-
           RtcDateTime settime = RtcDateTime(t);
           Serial.print("Setting Date Time: ");
           Serial.println(t);
@@ -214,12 +274,22 @@ void cmd_parse(char *cmd)
   }
 
   if (memcmp(argv[0], "+SCH", 3) == 0) {
-    if(argv[14][0] != 'X' && argv[14][0] != 'F'){
+    int8_t c = NUM_OF_DOORS+10;
+    if(argv[c][0] != 'X' && argv[c][0] != 'F'){
       Serial.println(F("General Error with formatting +SCH command."));
       Serial.println(F("Example:"));
       Serial.println(F("+SCH 2016 05 255 255 01 00 05 00 LU LU LU LU O X"));
       Serial.println(F("+SCH 255 255 255 255 00 00 23 59 LA LA LA LA A X"));
+//+SCH 255 255 255 255 00 00 23 59 LA LA LA LA LA LA LA LA A X
+//+SCH 255 255 255 255 00 00 23 00 LA LA LA LA LA LA LA LA A X
+//+SCH 16 7 18 255 20 22 23 00 LA LA LA LA LA LA LA LA A F
+//+SCH 16 7 255 255 20 22 23 00 LA LA LA LA LA LA LA LA A F
 
+//+SCH 16 255 255 255 00 00 23 59 UC UC UC UC UU UU UU UU U X
+//+SCH 16 255 255 255 00 00 23 59 UC UC UC UC UU UU UU UU U X
+//+SCH 16 255 255 255 00 00 19 59 XX XC FA UA IC UI II II U X
+
+//+SCH year month day dow bh bm eh em d0 d1
       return;
     }
     schedule1.add(argv);
@@ -448,8 +518,7 @@ void readerZero(void) {
       cmd[i] = v;
       sprintf(t,"%d",v);
       temp[i] = t[0];
-      //Serial.println(v);
-    }
+      }
     i++;
     temp[i]='\0';
     longv = atol (temp);
@@ -480,12 +549,12 @@ void readerZero(void) {
 
         if(readerBitCount == 26){
           cardID = (readerBits & 0x1FFFFFE) >>1;
-          showCode(cardID);
+          showCode(cardID, true);
           readerBits = 0;
           readerBitCount = 0;
 
-          *wg_msg_ptr = '\0';
-          wg_msg_ptr = wgmsg;
+          keypadBuffer = 0;
+
 
           //prepWiegand();
           return;
@@ -494,24 +563,42 @@ void readerZero(void) {
         if(readerBitCount == 4){
           int data = (int) readerBits & 0x0000000F;
 
+          if(authorized_user != -1){
+
+              //authorized user is interacting with keypad... extend the timeout
+              authorized_timestamp = millis();
+
+
+              Serial.print("Authorized User >> ");
+              Serial.print(authorized_user);
+              Serial.print(" >> entered: ");
+              Serial.print(data);
+              Serial.println();
+
+              //reset bits
+              readerBits = 0;
+              readerBitCount = 0;
+              return;
+          }
+
           switch (data)
           {
+            case 0:
+              keypadBuffer = keypadBuffer*10;
+            break;
             case 11:
-                *wg_msg_ptr = '\0';
-                showCode(keypadToLong((char *)wgmsg));
-                wg_msg_ptr = wgmsg;
-                break;
-
+              showCode(keypadBuffer, false);
+              keypadBuffer = 0;
+            break;
             case 10:
                 // escape... clear buffer
-                *wg_msg_ptr = '\0';
-                wg_msg_ptr = wgmsg;
+                keypadBuffer = 0;
             break;
 
             default:
+                keypadBuffer = (keypadBuffer*10)+data;
                 // normal character entered. add it to the buffer
-                *wg_msg_ptr++ = data;
-                break;
+            break;
           }
 
           readerBits = 0;
@@ -541,7 +628,6 @@ void readerZero(void) {
 
 
 
-
 void setup()
 {
 
@@ -552,14 +638,11 @@ void setup()
   welcomeKeypad();
 
   msg_ptr = msg;
-  wg_msg_ptr = wgmsg;
-
   RTCSetup();
-
 
   schedule1.loadFromMemory(1);
   schedule1.init();
-  users.loadFromMemory(200);
+  users.loadFromMemory(300);
 
 
   cmd_display();
@@ -591,20 +674,33 @@ void loop()
       cmd_handler();
   }
 
-
   loopCount++;
   if(loopCount == 25500){
 
-      digitalWrite(KEYPAD_BUZZER, HIGH);
-      digitalWrite(KEYPAD_LED, HIGH);
+      //make sure buzzer is off
+      keypad_buzzer_off();
 
     if (!Rtc.IsDateTimeValid()){
         //Serial.println("RTC lost confidence in the DateTime!");
     }
     loopCount=0;
     RtcDateTime now = Rtc.GetDateTime();
-
     schedule1.poll(now);
-
   }
+
+  if(authorized_timestamp > 0){
+    if(millis() - authorized_timestamp < 8000){
+
+      keypad_led_on();
+
+    }else{
+      authorized_timestamp = 0;
+      authorized_user = -1;
+      keypad_led_off();
+    }
+  }else{
+    //not authorized .. or timedout
+    keypad_led_off();
+  }
+
 }

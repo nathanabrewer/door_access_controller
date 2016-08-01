@@ -43,13 +43,19 @@ class ScheduleType {
 
 class Scheduler{
 private:
+  #if (DS3231 == 1)
     RtcDS3231 _RTC;
+  #else
+    RtcDS1307 _RTC;
+  #endif
     uint8_t doorScheduleState;
     uint8_t rules_count;
     DoorSensor doors[NUM_OF_DOORS];
     uint8_t door_count;
     ScheduleType schedule[MAX_SCHEDULE_SIZE];
     ScheduleMetricType schedule_metric[MAX_SCHEDULE_SIZE];
+    uint8_t SortIndex[MAX_SCHEDULE_SIZE];
+    uint8_t SortMetric[MAX_SCHEDULE_SIZE];
     SiteState resolved_state;
     SiteState current_state;
     int minutes_till_open;
@@ -68,4 +74,7 @@ public:
     void loadFromMemory(uint8_t memConfigStart);
     void clearAll();
     void status();
+    void resetSortIndex();
+    void remove(uint8_t index);
+    void guestEntraceRequest();
 };

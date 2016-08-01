@@ -1,18 +1,18 @@
 #include <Arduino.h>
 #include "door.h"
 
+#define RELAY_LOCK HIGH
+#define RELAY_UNLOCK LOW
+
 void DoorSensor::setPin( uint8_t sp, uint8_t rp ){
   sensor_pin = sp;
   relay_pin = rp;
 
   sensor_state = DOOR_SENSOR_STATE_UNKNOWN;
-  sensor_last_state = DOOR_SENSOR_STATE_UNKNOWN;
   pinMode(sensor_pin, INPUT_PULLUP);
-  //pinMode(sensor_pin, INPUT);
-
   pinMode(relay_pin, OUTPUT);
 
-  digitalWrite(relay_pin, HIGH);
+  digitalWrite(relay_pin, RELAY_LOCK);
 }
 
 int DoorSensor::getValue(){
@@ -27,18 +27,21 @@ int DoorSensor::getRelayState(){
 void DoorSensor::lock( )
 {
   relay_lock_state = true;
-  Serial.print("LOCK SET PIN HIGH - PIN:");
-  Serial.println(relay_pin);
-
-  digitalWrite(relay_pin, HIGH);
+  Serial.print("LOCK REQUEST. Setting Pin ");
+  Serial.print(relay_pin);
+  Serial.print(" to logic state ");
+  Serial.println(RELAY_LOCK);
+  digitalWrite(relay_pin, RELAY_LOCK);
 }
+
 void DoorSensor::unlock( )
 {
   relay_lock_state = false;
-  Serial.print("LOCK SET PIN LOW - PIN:");
-  Serial.println(relay_pin);
-
-  digitalWrite(relay_pin, LOW);
+  Serial.print("UNLOCK REQUEST. Setting Pin ");
+  Serial.print(relay_pin);
+  Serial.print(" to logic state ");
+  Serial.println(RELAY_UNLOCK);
+  digitalWrite(relay_pin, RELAY_UNLOCK);
 }
 
 void DoorSensor::poll()
@@ -49,12 +52,4 @@ void DoorSensor::poll()
   if ( sensor_reading >= 400 && sensor_reading <= 500 ) sensor_state = DOOR_SENSOR_STATE_TAMPER;
   if ( sensor_reading >= 500 && sensor_reading <= 799 ) sensor_state = DOOR_SENSOR_STATE_ALARM;
   if ( sensor_reading >= 800 ) sensor_state = DOOR_SENSOR_STATE_CUT;
-
-  // Compare to previous value
-  // if ( sensor_state != sensor_last_state )
-  // {
-  //   sensor_state_change(id, sensor_last_state, sensor_state);
-  //   sensor_last_state = sensor_state;
-  // }
-
 }

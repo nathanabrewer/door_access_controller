@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <Streaming.h>
 #include "Users.h"
-
+#include "MD5.h"
 
 void Users::clearAll(){
   users_count = 0;
@@ -42,14 +42,62 @@ void Users::save(uint8_t memConfigStart){
 }
 
 
-void Users::add(char pin_hash[33], long rfid, uint8_t access_level, bool admin){
+void Users::add(int user_id, long pin, long rfid, uint8_t access_level, bool admin){
   Serial.print(F("Saving USER Entry to slot: "));
   Serial.println(users_count);
-  //users[users_count].pin_hash = pin_hash;
+
+  users[users_count].user_id = user_id;
+  users[users_count].pin = pin;
   users[users_count].rfid = rfid;
   users[users_count].access_level = access_level;
   users[users_count].admin = admin;
 
   users_count++;
+
+};
+
+int Users::lookupRFID(long rfid){
+  for(uint8_t i =0; i < users_count; i++){
+
+    // Serial.print("Compare");
+    // Serial.print(users[i].rfid);
+    // Serial.print(" to ");
+    // Serial.println(rfid);
+
+    if(users[i].rfid == rfid){
+//      Serial.println(">> USER MATCH");
+      return users[i].user_id;
+    }
+  }
+  return -1;
+}
+
+int Users::lookupPIN(long pin){
+  for(uint8_t i =0; i < users_count; i++){
+    if(users[i].pin == pin) return users[i].user_id;
+  }
+  return -1;
+}
+
+void Users::list(){
+
+  Serial.println("User List");
+  Serial.println("Index\tUser ID\tPin\tRFID\tAccess\tAdmin");
+
+  for(uint8_t i =0; i < users_count; i++){
+    Serial.print(i);
+    Serial.print("\t");
+    Serial.print(users[i].user_id);
+
+    Serial.print("\t");
+    Serial.print(users[i].pin);
+    Serial.print("\t");
+    Serial.print(users[i].rfid);
+    Serial.print("\t");
+    Serial.print(users[i].access_level);
+    Serial.print("\t");
+    Serial.println(users[i].admin);
+  }
+
 
 };
