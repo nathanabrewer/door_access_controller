@@ -1,8 +1,7 @@
 #include <Arduino.h>
 #include "door.h"
+#include "config.h"
 
-#define RELAY_LOCK HIGH
-#define RELAY_UNLOCK LOW
 
 void DoorSensor::setPin( uint8_t sp, uint8_t rp ){
   sensor_pin = sp;
@@ -27,9 +26,9 @@ int DoorSensor::getRelayState(){
 void DoorSensor::lock( )
 {
   relay_lock_state = true;
-  Serial.print("LOCK REQUEST. Setting Pin ");
+  Serial.print(F("LOCK REQUEST. Setting Pin "));
   Serial.print(relay_pin);
-  Serial.print(" to logic state ");
+  Serial.print(F(" to logic state "));
   Serial.println(RELAY_LOCK);
   digitalWrite(relay_pin, RELAY_LOCK);
 }
@@ -37,15 +36,48 @@ void DoorSensor::lock( )
 void DoorSensor::unlock( )
 {
   relay_lock_state = false;
-  Serial.print("UNLOCK REQUEST. Setting Pin ");
+  Serial.print(F("UNLOCK REQUEST. Setting Pin "));
   Serial.print(relay_pin);
-  Serial.print(" to logic state ");
+  Serial.print(F(" to logic state "));
   Serial.println(RELAY_UNLOCK);
+  digitalWrite(relay_pin, RELAY_UNLOCK);
+}
+
+void DoorSensor::grantAccess( )
+{
+  if(relay_lock_state == false){
+    Serial.println(F("grantAccess refused. relay lock state is false."));
+    return;
+  }
+  if(granting_access == true){
+    Serial.println(F("grantAccess refused. busy. already granting access"));
+    return;
+  }
+
+  Serial.print(F("Granting Access to "));
+  Serial.print(relay_pin);
+  grant_access_time = millis();
+  granting_access = true;
+
+  //unlock(); we want to manually override the relay state. Then if the schedule actually unlocks this door at the same time, we can simply upgrade its state to unlocked as normal
   digitalWrite(relay_pin, RELAY_UNLOCK);
 }
 
 void DoorSensor::poll()
 {
+  if(granting_access){
+    if(millis() - grant_access_time > GRANT_ACCESS_RELAY_TIME){
+      granting_access = false;
+      if(relay_lock_state){
+        Serial.println(F("Grant Access Ended. Returning door to Locked State"));
+        digitalWrite(relay_pin, RELAY_UNLOCK);
+      }else{
+        Serial.println(F("Grant Access Ended. Door state was previously changed to unlock. No action taken."));
+      }
+
+    }
+  }
+
   sensor_reading = analogRead(sensor_pin);
   if ( sensor_reading >= 0 && sensor_reading <= 110 ) sensor_state = DOOR_SENSOR_STATE_SHORT;
   if ( sensor_reading >= 110 && sensor_reading <= 400 ) sensor_state = DOOR_SENSOR_STATE_NORMAL;

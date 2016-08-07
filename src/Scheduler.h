@@ -13,6 +13,8 @@ class SiteState{
     uint8_t matching_rules;
     ScheduleDoor doors[NUM_OF_DOORS];
     uint8_t env_flag;
+
+
 };
 
 class ScheduleMetricType{

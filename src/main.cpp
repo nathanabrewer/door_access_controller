@@ -5,7 +5,7 @@
 
 #include "Scheduler.h"
 #include "Users.h"
-#include "MD5.h"
+// #include "MD5.h"
 #include "pins_arduino.h"
 #include <avr/pgmspace.h>
 #include "config.h"
@@ -28,12 +28,17 @@ int authorized_user = -1;
   RtcDS1307 Rtc;
 #endif
 
+#if(BOARD_TYPE == MEGA_BOARD)
+  #include <RCSwitch.h>
+  RCSwitch mySwitch = RCSwitch();
+#endif
+
 int loopCount=0;
 int rules_count = 0;
 
 Scheduler schedule1;
 Users users;
-MD5 md5;
+//MD5 md5;
 
 
 volatile long readerBits = 0;
@@ -111,7 +116,7 @@ void command_help()
 }
 
 void command_save(){
-  Serial << "Saving Schedule..." << endl;
+  Serial.println(F("Saving Schedule..."));
   schedule1.save(1);
   users.save(300);
 }
@@ -382,13 +387,8 @@ void p(char *fmt, ... ){
 void cmd_display()
 {
     Serial.println();
-    Serial.println("DOOR CONTROLLER");
-    Serial.println("");
-    Serial.println("");
-    Serial.print("# ");
+    Serial.println(F("READY."));
 }
-
-
 
 
 //WIEGAND... read bits, called by interrupts
@@ -631,11 +631,25 @@ void readerZero(void) {
 void setup()
 {
 
+  Serial.begin(BAUD_RATE);
 
-  Serial.begin(57600);
+  Serial.print(F("BOARD_TYPE: "));
+  Serial.println(BOARD_TYPE);
 
-  Serial.println("Int Keypad");
+  Serial.print(F("NUM_OF_DOORS: <"));
+  Serial.print(NUM_OF_DOORS);
+  Serial.println(">");
+
+  Serial.println(F("Int Keypad"));
   welcomeKeypad();
+
+  #if(BOARD_TYPE == MEGA_BOARD)
+    #include <RCSwitch.h>
+    Serial.print("Int Radio rx");
+    mySwitch.enableReceive(5);  // pin 18
+    //	2	3	21	20	19	18
+    //0, 1, 2,   3,  4,  5
+  #endif
 
   msg_ptr = msg;
   RTCSetup();
@@ -673,6 +687,24 @@ void loop()
   {
       cmd_handler();
   }
+
+  #if(BOARD_TYPE == MEGA_BOARD)
+      if (mySwitch.available()) {
+        int value = mySwitch.getReceivedValue();
+        if (value == 0) {
+          Serial.print("Unknown encoding");
+        } else {
+         Serial.print("Received ");
+          Serial.print( mySwitch.getReceivedValue() );
+          Serial.print(" / ");
+          Serial.print( mySwitch.getReceivedBitlength() );
+          Serial.print("bit ");
+          Serial.print("Protocol: ");
+          Serial.println( mySwitch.getReceivedProtocol() );
+        }
+        mySwitch.resetAvailable();
+      }
+  #endif
 
   loopCount++;
   if(loopCount == 25500){

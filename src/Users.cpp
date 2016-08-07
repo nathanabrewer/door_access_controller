@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <Streaming.h>
 #include "Users.h"
-#include "MD5.h"
+// #include "MD5.h"
 
 void Users::clearAll(){
   users_count = 0;
@@ -81,8 +81,8 @@ int Users::lookupPIN(long pin){
 
 void Users::list(){
 
-  Serial.println("User List");
-  Serial.println("Index\tUser ID\tPin\tRFID\tAccess\tAdmin");
+  Serial.println(F("User List"));
+  Serial.println(F("Index\tUser ID\tPin\tRFID\tAccess\tAdmin"));
 
   for(uint8_t i =0; i < users_count; i++){
     Serial.print(i);

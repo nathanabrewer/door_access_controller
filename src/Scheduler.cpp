@@ -16,6 +16,8 @@ char* relayStateTxt[] = {
   "Inherit    "
 };
 
+const char* SCREEN_TAB = "\t";
+
 const signed char relayState[] = {'X', 'U','L', 'F', 'I'};
 enum relay_state {RELAY_STATE_NONE, RELAY_STATE_UNLOCKED, RELAY_STATE_LOCKED, RELAY_STATE_FORCE_LOCK, RELAY_STATE_INHERIT};
 
@@ -47,7 +49,7 @@ void Scheduler::init(){
 }
 
 void Scheduler::guestEntraceRequest(  ){
-  Serial.print("TODO... OPEN DOOR");
+  Serial.print(F("TODO... OPEN DOOR"));
 }
 
 void Scheduler::poll( RtcDateTime dt )
@@ -64,6 +66,7 @@ void Scheduler::poll( RtcDateTime dt )
 
       if(doors[i].sensor_state == DOOR_SENSOR_STATE_SHORT){
         Serial << "RTE <" << i << ">" << endl;
+        doors[i].grantAccess();
       }
 
     }
@@ -121,9 +124,9 @@ void Scheduler::poll( RtcDateTime dt )
 
   }
   if(current_state.env_flag != resolved_state.env_flag){
-    Serial.print(">> Site State Has Changed - ");
+    Serial.print(F(">> Site State Has Changed - "));
     Serial.print(current_state.env_flag);
-    Serial.print(" to ");
+    Serial.print(F(" to "));
     Serial.println(resolved_state.env_flag);
     //site env flag changed
     current_state.env_flag = resolved_state.env_flag;
@@ -140,7 +143,7 @@ const char* dayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"
 void Scheduler::loadFromMemory(uint8_t memConfigStart){
   rules_count = EEPROM.read(memConfigStart);
   if(rules_count > 20){
-    Serial.println("Invalid Rules Count");
+    Serial.println(F("Invalid Rules Count"));
     rules_count = 0;
   }
   for (unsigned int t=0; t<sizeof(schedule); t++)
@@ -167,8 +170,9 @@ uint8_t Scheduler::resolveRelayState(char key){
 
 void Scheduler::add(char **args){
 
-  Serial << "Saved Rule to schedule slot: " << endl;
-  Serial << rules_count << endl;
+  Serial.println(F("Saved Rule to schedule slot: "));
+  Serial.println(rules_count);
+
   int year = atoi(args[1]);
   if(year > 2000) year -= 2000;
   schedule[rules_count].year            = year;
@@ -232,14 +236,14 @@ void Scheduler::save(uint8_t memConfigStart){
           Serial.print(".");
         }
   }
-  Serial.print("Saved ");
+  Serial.print(F("Saved "));
   Serial.print(sizeof(schedule)+1);
-  Serial.println(" bytes of data");
+  Serial.println(F(" bytes of data"));
 }
 
 void printPad(int8_t num){
   if(num == 255 || num == -1){
-    Serial.print("ANY");
+    Serial.print(F("ANY"));
     return;
   }
   if(num < 9){
@@ -271,7 +275,9 @@ void Scheduler::list(){
     Serial.print(F("index\tYEAR-MONTH-DAY\tDOW\tSTART-END"));
 
     for (uint8_t d=0; d<NUM_OF_DOORS; d++){
-      Serial << "\tDR" << d;
+      Serial.print(SCREEN_TAB);
+      Serial.print(F("DR"));
+      Serial.print(d);
     }
 
     Serial.println(F("\tSITE\tRULE\t_metric\t_match\t_aged\t_until"));
@@ -280,7 +286,7 @@ void Scheduler::list(){
     {
       //lookup actual sort order by integer sort index
       uint8_t i = SortIndex[ii];
-      Serial << _DEC(i) << "\t";
+      Serial << _DEC(i) << SCREEN_TAB;
       Serial << "20";
       printPad(schedule[i].year);
       Serial << "-";
@@ -288,9 +294,9 @@ void Scheduler::list(){
       Serial << "-";
       printPad(schedule[i].day);
 
-      Serial << "\t";
+      Serial << SCREEN_TAB;
       printPad(schedule[i].dow);
-      Serial << "\t";
+      Serial << SCREEN_TAB;
 
       printPad(schedule[i].open_hour);
       Serial << ":";
@@ -301,20 +307,20 @@ void Scheduler::list(){
       printPad(schedule[i].close_min);
 
       for (uint8_t d=0; d<NUM_OF_DOORS; d++){
-        Serial << "\t" << _BYTE(relayState[ schedule[i].doors[d].relay]) << _BYTE(sensorState[schedule[i].doors[d].sensor]);
+        Serial << SCREEN_TAB << _BYTE(relayState[ schedule[i].doors[d].relay]) << _BYTE(sensorState[schedule[i].doors[d].sensor]);
       }
 
-      Serial << "\t"
+      Serial << SCREEN_TAB
         << _BYTE(envState[ schedule[i].env_flag ])
-      << "\t"
+      << SCREEN_TAB
         << _BYTE(ruleFlag[ schedule[i].rule_flag ])
-      << "\t"
+      << SCREEN_TAB
         << _DEC(schedule_metric[i].metric)
-      << "\t"
+      << SCREEN_TAB
         << _DEC(schedule_metric[i].match)
-      << "\t"
+      << SCREEN_TAB
         << _DEC(schedule_metric[i].minutes_since)
-      << "\t"
+      << SCREEN_TAB
         << _DEC(schedule_metric[i].minutes_until)
       << endl;
     }
@@ -322,13 +328,17 @@ void Scheduler::list(){
 
 
     //Show Current Schedule State of Door/Sensor
-    Serial << endl << "-=-=-=-=-=-=-=-" << endl;
-    Serial << "Resolved Status from " << current_state.matching_rules << " Matching Schedule Rules" << endl;
+    Serial.println();
+    Serial.println(F("-=-=-=-=-=-=-=-"));
+    Serial.print(F("Resolved Status from "));
+    Serial.print( current_state.matching_rules );
+    Serial.println(F(" Matching Schedule Rules"));
+
     for (uint8_t d=0; d<NUM_OF_DOORS; d++){
 
       Serial << "Door" << d  << " - \tRelay:\t"  << relayStateTxt[current_state.doors[d].relay] << "\t\tSensor:\t" << sensorStateTxt[current_state.doors[d].sensor] << endl;
     }
-    Serial << "-=-=-=-=-=-=-=-" << endl;
+    Serial.println(F("-=-=-=-=-=-=-=-"));
     Serial << "SiteState:\t" << envStateTxt[ current_state.env_flag ]  << endl;
 }
 
@@ -376,9 +386,11 @@ void Scheduler::sort() {
 void Scheduler::status(){
 
 if(current_state.matching_rules < 1){
-  Serial << "Warning... There is currently No Matching Schedule Rules. This should be addressed" << endl;
+  Serial.println(F("Warning... There is currently No Matching Schedule Rules. This should be addressed"));
 }else{
-  Serial << "Site State set by " << _DEC(current_state.matching_rules) << " matching Rules" << endl;
+  Serial.print(F("Site State set by "));
+  Serial.print((int)current_state.matching_rules);
+  Serial.println(F(" matching Rules"));
 }
   uint8_t i;
 
@@ -388,19 +400,22 @@ if(current_state.matching_rules < 1){
 
 
   if(minutes_till_open > 0){
-    Serial.print("Site will be opening in ");
+    Serial.print(F("Site will be opening in "));
     Serial.print(minutes_till_open);
     Serial.println(" Minutes");
   }
   if(minutes_till_close > 0){
-    Serial.print("Site will be closing in ");
+    Serial.print(F("Site will be closing in "));
     Serial.print(minutes_till_close);
-    Serial.println(" Minutes");
+    Serial.println(F(" Minutes"));
   }
 }
 
 void Scheduler::setDoorState(uint8_t door, uint8_t state ){
-  Serial << "Set Door " << door << " State " << state << endl;
+  Serial.print(F("Set Door "));
+  Serial.print(door);
+  Serial.print(F(" State "));
+  Serial.println(state);
 
   if(state == RELAY_STATE_LOCKED) doors[door].lock();
   if(state == RELAY_STATE_UNLOCKED) doors[door].unlock();
