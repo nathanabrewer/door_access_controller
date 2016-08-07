@@ -31,6 +31,8 @@ int authorized_user = -1;
 #if(BOARD_TYPE == MEGA_BOARD)
   #include <RCSwitch.h>
   RCSwitch mySwitch = RCSwitch();
+  int last_rf_value;
+  long last_rf_time;
 #endif
 
 int loopCount=0;
@@ -694,13 +696,18 @@ void loop()
         if (value == 0) {
           Serial.print("Unknown encoding");
         } else {
-         Serial.print("Received ");
-          Serial.print( mySwitch.getReceivedValue() );
-          Serial.print(" / ");
-          Serial.print( mySwitch.getReceivedBitlength() );
-          Serial.print("bit ");
-          Serial.print("Protocol: ");
-          Serial.println( mySwitch.getReceivedProtocol() );
+          if(last_rf_value != value || last_rf_value == value && (millis() - last_rf_time > 1000) ){
+            last_rf_value = value;
+            last_rf_time = millis();
+             Serial.print("RF <");
+             Serial.print( mySwitch.getReceivedValue() );
+             Serial.print("> <");
+             Serial.print( mySwitch.getReceivedBitlength() );
+             Serial.print("> <");
+             Serial.print( mySwitch.getReceivedProtocol() );
+             Serial.println(">");
+
+          }
         }
         mySwitch.resetAvailable();
       }

@@ -1,6 +1,19 @@
+# Supported Devices
+1. Arduino uno
+2. Arduino Mega 2560
+3. Numato Programmable 4 channel Relay
+4. Wemos mini D1 - ESP8266
+
+| Device       | Doors | RTC                | Keypad       | 433mhz Receiver  |
+|--------------|-------|--------------------|--------------|------------------|
+| Arduino Uno  |  4    | DS3231 External    | Pin 2,3,4,5  | n/a              |
+| Arduino MEGA |  8    | DS3231 External    | Pin 2,3,4,5  | Pin 18 (Int 5)   |
+| Numato       |  4    | Internal           | Pin 4,5,12,6 | n/a              |
+| Wemos        |  x    | x                  | x            |                  |
+
 # Door and Security MCU
 
-v1.0 MCU will support 4 doors right out of the box. Rather than just Locked, and Unlocked states for a given relay,  we will implement a few other options for flexibility. The schedule will include flags for each door relay state, each door sensor/monitor state, and site environment state. Flags such as “Inherited”, “No State Applied”, and “Final Rule” will facilitate the ability of making complex rule combinations.
+v1.0 MCU will support any number of doors. Rather than just Locked, and Unlocked states for a given relay,  we will implement a few other options for flexibility. The schedule will include flags for each door relay state, each door sensor/monitor state, and site environment state. Flags such as “Inherited”, “No State Applied”, and “Final Rule” will facilitate the ability of making complex rule combinations.
 
 Order of Operation will attempt to match in the following order:
 1. Exact date (year, month, day)
