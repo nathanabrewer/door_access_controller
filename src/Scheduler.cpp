@@ -8,7 +8,7 @@
 #define DEFAULT_ENV_STATE 1
 #define MATCH_ANY 255
 
-char* relayStateTxt[] = {
+const char* relayStateTxt[] = {
   "Default    ",
   "Unlocked   ",
   "Locked     ",
@@ -21,7 +21,7 @@ const char* SCREEN_TAB = "\t";
 const signed char relayState[] = {'X', 'U','L', 'F', 'I'};
 enum relay_state {RELAY_STATE_NONE, RELAY_STATE_UNLOCKED, RELAY_STATE_LOCKED, RELAY_STATE_FORCE_LOCK, RELAY_STATE_INHERIT};
 
-char* sensorStateTxt[] = {
+const char * sensorStateTxt[] = {
   "Default",
   "UnArmed",
   "Chime Mode",
@@ -32,7 +32,7 @@ char* sensorStateTxt[] = {
 const signed char sensorState[] = {'X','U','C','A','I'};
 enum sensor_state {SENSOR_STATE_NONE, SENSOR_STATE_UNARMED, SENSOR_STATE_CHIME, SENSOR_STATE_ARMED, SENSOR_STATE_INHERIT};
 
-char* envStateTxt[] = {"Default", "Site Unarmed", "Site Armed", "Site Stay Mode", "Site Force Armed", "Site Force DISARMED", "Inherit"};
+const char* envStateTxt[] = {"Default", "Site Unarmed", "Site Armed", "Site Stay Mode", "Site Force Armed", "Site Force DISARMED", "Inherit"};
 const signed char envState[] = {'X','U','A','S','F','O','I'};
 enum env_state {ENV_STATE_NONE, ENV_STATE_UNARMED, ENV_STATE_ARMED, ENV_STATE_STAY, ENV_STATE_FORCE_ARMED, ENV_STATE_FORCE_DISARMED, ENV_STATE_INHERIT};
 
@@ -141,6 +141,7 @@ sort();
 const char* dayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 void Scheduler::loadFromMemory(uint8_t memConfigStart){
+  #if(BOARD_TYPE != ESP_BOARD)
   rules_count = EEPROM.read(memConfigStart);
   if(rules_count > 20){
     Serial.println(F("Invalid Rules Count"));
@@ -148,7 +149,9 @@ void Scheduler::loadFromMemory(uint8_t memConfigStart){
   }
   for (unsigned int t=0; t<sizeof(schedule); t++)
   *((char*)&schedule + t) = EEPROM.read(memConfigStart + 1 + t);
-
+  #else
+  Serial.println("Not currently supported on ESP");
+  #endif
 }
 
 
@@ -221,6 +224,7 @@ void Scheduler::clearAll(){
   rules_count = 0;
 }
 
+#if(BOARD_TYPE != ESP_BOARD)
 void Scheduler::save(uint8_t memConfigStart){
   EEPROM.write(memConfigStart, rules_count);
   char *s = (char *) &schedule;
@@ -240,6 +244,11 @@ void Scheduler::save(uint8_t memConfigStart){
   Serial.print(sizeof(schedule)+1);
   Serial.println(F(" bytes of data"));
 }
+#else
+void Scheduler::save(uint8_t memConfigStart){
+  Serial.print("Not currently supported on ESP");
+}
+#endif
 
 void printPad(int8_t num){
   if(num == 255 || num == -1){

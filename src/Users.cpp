@@ -7,6 +7,7 @@ void Users::clearAll(){
   users_count = 0;
 }
 
+#if(BOARD_TYPE != ESP_BOARD)
 void Users::loadFromMemory(uint8_t memConfigStart){
   users_count = EEPROM.read(memConfigStart);
   if(users_count > MAX_USERS){
@@ -40,7 +41,14 @@ void Users::save(uint8_t memConfigStart){
   Serial.println(" bytes of data");
 
 }
-
+#else
+  void Users::save(uint8_t memConfigStart){
+    Serial.print(F("User Save not operating on ESP yet"));
+  }
+  void Users::loadFromMemory(uint8_t memConfigStart){
+    Serial.print(F("User Load not operating on ESP yet"));
+  }
+#endif
 
 void Users::add(int user_id, long pin, long rfid, uint8_t access_level, bool admin){
   Serial.print(F("Saving USER Entry to slot: "));

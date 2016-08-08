@@ -7,7 +7,6 @@
 #include "Users.h"
 // #include "MD5.h"
 #include "pins_arduino.h"
-#include <avr/pgmspace.h>
 #include "config.h"
 
 
@@ -410,21 +409,14 @@ void readerZero(void) {
 }
 
 
+#if(BOARD_TYPE == UNO_BOARD || BOARD_TYPE == NUMATO_BOARD)
 
-
-//***************** vv Code for managing interruptions vv ********************
-  /*
-    All terminals can generate interrupts on ATmega168 transition.
-    The bit corresponding to the terminal to be the source of the event should
-    be enabled in the registry correspond PCInt and a service routine (ISR).
-    Because the registration PCInt operates port, not terminal, the routine ISR
-    must use some algorithm to implement an interrupt service routine
-    by terminal
+/*
     Correspondenicas terminal and to interrupt masking registers:
       D0-D7 => 16-23 = PCIR2 PCInt = PD = PCIE2 = pcmsk2
       D8-D13 => 0-5 = PCIR0 PCInt = PB = PCIE0 = pcmsk0
       A0-A5 (D14-D19) => 8-13 = PCIR1 PCInt = PC = PCIE1 = pcmsk1
-   */
+ */
 
   volatile uint8_t *port_to_pcmask[] = { &PCMSK0, &PCMSK1, &PCMSK2 };
 
@@ -502,7 +494,7 @@ void readerZero(void) {
   //*********** vv Code for counting and storing bits vv **********
 
 
-
+#endif
 
 
   unsigned long keypadToLong(char *cmd)
@@ -665,13 +657,12 @@ void setup()
 
   //KEYPAD
 
-  #if DC_MEGA
-    attachInterrupt(digitalPinToInterrupt(WIEGAND_DATA1_PIN), readerOne, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(WIEGAND_DATA0_PIN), readerZero, CHANGE);
-
-  #else
+  #if(BOARD_TYPE == UNO_BOARD || BOARD_TYPE == NUMATO_BOARD)
     PCattachInterrupt(WIEGAND_DATA1_PIN, readerOne, CHANGE);
     PCattachInterrupt(WIEGAND_DATA0_PIN, readerZero, CHANGE);
+  #else
+    attachInterrupt(digitalPinToInterrupt(WIEGAND_DATA1_PIN), readerOne, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(WIEGAND_DATA0_PIN), readerZero, CHANGE);
   #endif
   delay(10);
 

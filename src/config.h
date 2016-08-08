@@ -3,6 +3,8 @@
 #define DC_CONFIG
 
 #include "EEPROM.h"
+#include <Arduino.h>
+#include <pins_arduino.h>
 
 
 #define BAUD_RATE 57600
@@ -20,6 +22,7 @@
 //#define BOARD_TYPE 3
 
 #if(BOARD_TYPE == NUMATO_BOARD)
+    #include <avr/pgmspace.h>
     #define RELAY_LOCK LOW
     #define RELAY_UNLOCK HIGH
     #define DS3231 0
@@ -35,6 +38,7 @@
 #endif
 
 #if(BOARD_TYPE == MEGA_BOARD)
+    #include <avr/pgmspace.h>
     #define RELAY_LOCK HIGH
     #define RELAY_UNLOCK LOW
     #define DS3231 1
@@ -50,6 +54,7 @@
 #endif
 
 #if(BOARD_TYPE == UNO_BOARD)
+    #include <avr/pgmspace.h>
     #define RELAY_LOCK HIGH
     #define RELAY_UNLOCK LOW
     #define DS3231 1
@@ -65,6 +70,10 @@
 #endif
 
 #if(BOARD_TYPE == ESP_BOARD)
+
+extern "C" {
+#include "user_interface.h"
+}
     #define RELAY_LOCK HIGH
     #define RELAY_UNLOCK LOW
     #define DS3231 1
@@ -74,9 +83,9 @@
     #define KEYPAD_LED 12
     #define KEYPAD_BUZZER 6
     #define MAX_SCHEDULE_SIZE 10
-    #define NUM_OF_DOORS 4
+    #define NUM_OF_DOORS 1
     #define MAX_USERS 5
-    const int doorPinMatrix[NUM_OF_DOORS][2] = { {A0,  2 }, {A1,  3 }, {A2, 4 }, {A3, 5 } };
+    const int doorPinMatrix[NUM_OF_DOORS][2] = { {3, 4 } };
 #endif
 
 #if (DS3231 == 1)
